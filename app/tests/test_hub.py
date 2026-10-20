@@ -110,3 +110,47 @@ def test_vendored_hub_matches_the_connectors():
     assert hub_base.REQUIRED_ITEM_FIELDS == dev_hub.REQUIRED_ITEM_FIELDS
     assert inspect.getsource(hub_base.DevHub) == inspect.getsource(dev_hub.DevHub), \
         "connectors/dev_hub.py changed: copy DevHub into app/mini_cortex/hub_base.py"
+
+
+def test_intake_log_ids_survive_a_restart(tmp_path):
+    """The log lives in SQLite across restarts: a new process must not reuse the ids of the last one."""
+    for _ in range(2):
+        pipeline = Pipeline(LLMSettings(provider="custom", base_url="http://x/v1"), data=tmp_path)
+        hub = Hub("dev-token", backfill_days=None, store_path=None, pipeline=pipeline)
+        hub.log_intake("PUSH", "replay", "channels", [item(1)], {"accepted": 1})
+        hub.log_intake("FETCH", "replay", "channels", [item(2)], None)
+    ids = [e["id"] for e in pipeline.state.memory_log()]
+    assert len(ids) == 4 and len(set(ids)) == 4
+
+
+async def test_a_push_during_backfill_does_not_shrink_it(unused_tcp_port):
+    """Streams are backfilled one after the other. A push that lands on a later stream before its turn must not
+    turn that stream's first backfill into a 5-minute catch-up (which would skip its whole history)."""
+    hub = Hub("dev-token", backfill_days=60, store_path=None)
+    hub_url = f"ws://127.0.0.1:{unused_tcp_port}/connectors"
+    now = datetime.now(UTC)
+    history = {"source_id": "mail:1", "timestamp": iso(now - timedelta(days=10)), "content": "old mail",
+               "thread_id": "inbox"}
+    live = {"source_id": "mail:2", "timestamp": iso(now), "content": "new mail", "thread_id": "inbox"}
+
+    async def slow_channels(since, until, cursor, limit):
+        await asyncio.sleep(0.5)                       # the mail push lands while this runs
+        return Page([])
+
+    async def mail(since, until, cursor, limit):
+        return Page([i for i in (history, live) if since <= connector_sdk.parse_iso(i["timestamp"]) < until])
+
+    conn = Connector("replay", hub_url, "dev-token")
+    conn.add_stream(Stream("channels", kind="chat", fetch=slow_channels))
+    conn.add_stream(Stream("mail", kind="email", fetch=mail))
+    async with hub.serving("127.0.0.1", unused_tcp_port):
+        task = asyncio.create_task(conn.run())
+        await asyncio.wait_for(conn.connected.wait(), 5)
+        await conn.push("mail", [live])
+        for _ in range(50):
+            if hub.backfill.get(("replay", "mail"), {}).get("state") == "done":
+                break
+            await asyncio.sleep(0.1)
+        assert hub.backfill[("replay", "mail")]["purpose"] == "backfill"
+        assert ("replay", "mail:1") in hub.items
+        task.cancel()

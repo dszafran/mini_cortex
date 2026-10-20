@@ -49,7 +49,8 @@ PRESETS: dict[str, Preset] = {
         id="scaleway", label="Scaleway Generative APIs", base_url="https://api.scaleway.ai/<project id>/v1",
         needs_key=True, key_env="SCW_SECRET_KEY",
         key_help="Scaleway console → IAM → API keys. The key's policy needs Generative APIs access in this project.",
-        chat_model="glm-5.3", extract_model="deepseek-v4.1-flash", embed_model="qwen3-embedding-8b", embed_dim=1024),
+        chat_model="qwen3-235b-a22b-instruct-2507", extract_model="qwen3-235b-a22b-instruct-2507",
+        embed_model="qwen3-embedding-8b", embed_dim=1024),
     "ollama": Preset(
         id="ollama", label="Ollama (local)", base_url="http://localhost:11434/v1", needs_key=False, key_env="LLM_API_KEY",
         key_help="No key needed. Pull the models first, e.g. `ollama pull qwen3:8b`."),
@@ -123,7 +124,7 @@ def read_env_file(path: Path) -> dict[str, str]:
     if not path.is_file():
         return {}
     out = {}
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         if line.lstrip().startswith("#"):
             continue
         m = LINE.match(line)
@@ -134,7 +135,7 @@ def read_env_file(path: Path) -> dict[str, str]:
 
 def write_env_file(path: Path, updates: Mapping[str, str | None]) -> None:
     """Set (or, with None, remove) keys in place. Other lines and comments are kept as they are."""
-    lines = path.read_text().splitlines() if path.is_file() else []
+    lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
     todo = dict(updates)
     out = []
     for line in lines:
@@ -150,7 +151,7 @@ def write_env_file(path: Path, updates: Mapping[str, str | None]) -> None:
         if out and out[-1].strip():
             out.append("")
         out += ["# mini-cortex LLM settings (written by the UI; safe to edit by hand)", *new]
-    path.write_text("\n".join(out) + "\n")
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")
     path.chmod(0o600)
 
 
@@ -208,7 +209,8 @@ def update_to_env(u: SettingsUpdate) -> dict[str, str | None]:
     out: dict[str, str | None] = {
         "LLM_PROVIDER": u.provider,
         "CHAT_MODEL": u.chat_model.strip(), "EXTRACT_MODEL": u.extract_model.strip(),
-        "EMBED_MODEL": u.embed_model.strip(), "EMBED_DIM": str(u.embed_dim) if u.embed_dim else None,
+        # 0 is a choice too ("model default"): written out, so the preset's size doesn't quietly come back.
+        "EMBED_MODEL": u.embed_model.strip(), "EMBED_DIM": str(u.embed_dim),
         "LLM_CA_BUNDLE": u.ca_bundle.strip() or None,
     }
     if u.provider == "scaleway":

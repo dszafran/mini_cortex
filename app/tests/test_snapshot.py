@@ -67,3 +67,16 @@ def test_bad_names(tmp_path):
     for name in ("../x", "a/b", ".hidden", ""):
         with pytest.raises(snapshot.SnapshotError):
             snapshot.save(name, tmp_path, SETTINGS, tmp_path / "snapshots")
+
+
+def test_a_gateway_prefix_is_the_same_model(tmp_path):
+    """Built behind a gateway that names the model `generative-apis/emb-a`, loaded by someone who calls it `emb-a`."""
+    data, root = tmp_path / "data", tmp_path / "snapshots"
+    make_memory(data)
+    snapshot.save("day1", data, SETTINGS.model_copy(update={"embed_model": "generative-apis/emb-a"}), root)
+    _, warning = snapshot.load("day1", data, SETTINGS, root)
+    assert warning is None
+    _, warning = snapshot.load("day1", data, SETTINGS.model_copy(update={"embed_model": "emb-b"}), root)
+    assert "generative-apis/emb-a" in warning
+    _, warning = snapshot.load("day1", data, SETTINGS.model_copy(update={"embed_model": "other/emb-a"}), root)
+    assert "other/emb-a" in warning                          # another gateway's emb-a may be another model

@@ -23,6 +23,7 @@ import asyncio
 import json
 import logging
 import os
+import signal
 import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -134,6 +135,18 @@ def setup_logging(verbose: bool = False) -> None:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
+def stop_on_signals() -> None:
+    """Closing the terminal (SIGHUP), a plain `kill` (SIGTERM) or Ctrl+Break on Windows (SIGBREAK) shuts down like
+    Ctrl+C. Connectors run in their own session, so without this they would outlive the app and dial into the next
+    one with their old code. uvicorn handles SIGTERM itself while serving and re-raises it afterwards: that lands
+    here too."""
+    def stop(signum: int, frame: object) -> None:
+        raise KeyboardInterrupt
+    for name in ("SIGTERM", "SIGHUP", "SIGBREAK"):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), stop)
+
+
 def serve(args: argparse.Namespace) -> None:
     data = data_dir()
     if url := snapshot.running(data):
@@ -171,6 +184,7 @@ def serve(args: argparse.Namespace) -> None:
                              ", ".join(launcher.available()) or "none")
             await serving_task
 
+    stop_on_signals()
     try:
         asyncio.run(run())
     except KeyboardInterrupt:

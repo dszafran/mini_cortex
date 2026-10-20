@@ -1,9 +1,12 @@
 """The connector launcher with a tiny fake adapter: env handed over, log lines prefixed, restarts capped, clean stop."""
 
+import signal
 import sys
 import time
 
-from mini_cortex import launcher
+import pytest
+
+from mini_cortex import launcher, server
 
 FAKE = '''
 import os, sys, time
@@ -63,3 +66,42 @@ def test_restarts_a_crashing_connector_then_gives_up(tmp_path, monkeypatch):
     assert child.starts == 3                                             # first run + 2 restarts
     assert "restarting in" in lines[1] and "gave up after 2 restarts" in lines[-1]
     run.stop()
+
+
+ENV_FAKE = '''
+import os, time
+print("start", os.environ.get("REPLAY_START"), "slack", os.environ.get("SLACK_TOKEN"),
+      "key", os.environ.get("LLM_API_KEY", "-"), flush=True)
+time.sleep(60)
+'''
+
+
+def test_connectors_get_the_app_env_but_not_the_model_key(tmp_path, monkeypatch):
+    env = tmp_path / ".env"
+    env.write_text("REPLAY_START=09:30\nSLACK_TOKEN=xoxb-file\nLLM_API_KEY=sk-secret\n")
+    monkeypatch.setenv("MINI_CORTEX_ENV", str(env))
+    monkeypatch.setenv("SLACK_TOKEN", "xoxb-real-env")                   # a real variable beats the file
+    monkeypatch.delenv("REPLAY_START", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    (tmp_path / "fake_adapter.py").write_text(ENV_FAKE)
+    lines: list[str] = []
+    cmd = lambda name: [sys.executable, str(launcher.adapter_path(name, tmp_path))]  # noqa: E731
+    run = launcher.Launcher(["fake"], "ws://127.0.0.1:1/connectors", "tok", cmd, tmp_path, lines.append)
+    run.start()
+    assert wait_for(lambda: lines)
+    run.stop()
+    assert lines[0] == "[fake] start 09:30 slack xoxb-real-env key -"
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGHUP"), reason="no SIGHUP on this platform")
+def test_terminal_close_and_kill_stop_like_ctrl_c():
+    """SIGHUP and SIGTERM become KeyboardInterrupt, so serve() reaches its `finally` and stops the connectors."""
+    old = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGHUP)}
+    try:
+        server.stop_on_signals()
+        for s in old:
+            with pytest.raises(KeyboardInterrupt):
+                signal.raise_signal(s)
+    finally:
+        for s, handler in old.items():
+            signal.signal(s, handler)

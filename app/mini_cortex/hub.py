@@ -15,6 +15,7 @@ from typing import Any
 
 from .hub_base import REQUIRED_ITEM_FIELDS, DevHub, Session, iso
 from .pipeline import Pipeline
+from .store import new_id
 
 MAX_FRAMES = 500
 MAX_LOG = 500
@@ -103,7 +104,6 @@ class Hub(DevHub):
         self.backfill: dict[tuple[str, str], dict] = {}       # (connector, stream) -> state
         self.subscribers: set[asyncio.Queue] = set()
         self._frame_ids = (f"f{n}" for n in itertools.count(1))
-        self._log_ids = (f"ml{n}" for n in itertools.count(1))
 
     # --- events -----------------------------------------------------------------------------------------
 
@@ -235,7 +235,8 @@ class Hub(DevHub):
         first = items[0] if items else {}
         new = counts.get("accepted", 0) + counts.get("updated", 0) if counts else None
         entry = {
-            "id": next(self._log_ids), "at": now(), "stage": "intake", "action": action,
+            # Random, not a counter: the log outlives the process, and its ids are unique in SQLite.
+            "id": new_id("ml"), "at": now(), "stage": "intake", "action": action,
             "title": f"{len(items)} {'item' if len(items) == 1 else 'items'} from {connector} {stream}",
             "reason": preview(first) if action == "PUSH" and first else None,
             "packet_ids": [],

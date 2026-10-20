@@ -40,8 +40,12 @@ export function RichText({
   rawCites?: number[]
   onCite?: (n: number) => void
 }) {
-  // Citations attach to the preceding word: "lighthouse [1]." renders as "lighthouse¹."
-  const paragraphs = text.replace(/\s+(\[\d+\])/g, '$1').split(/\n{2,}/)
+  // Citations attach to the preceding word: "lighthouse [1]." renders as "lighthouse¹." A grouped "[1, 3]" (models
+  // write it despite the prompt) becomes "[1][3]" first, so each number is its own link.
+  const paragraphs = text
+    .replace(/\[(\d+(?:\s*,\s*\d+)+)\]/g, (_, group: string) => group.split(',').map((n) => `[${n.trim()}]`).join(''))
+    .replace(/\s+(\[\d+\])/g, '$1')
+    .split(/\n{2,}/)
   return (
     <>
       {paragraphs.map((para, i) => (

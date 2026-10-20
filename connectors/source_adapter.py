@@ -175,8 +175,14 @@ async def dry_fetch(adapter: SourceAdapter, stream: str, since: datetime, until:
         cursor = page.next_cursor
 
 
-def load_env_file(path: str | Path = ".env") -> None:
-    """KEY=value lines into os.environ; variables that are already set win."""
+ENV_FILE = Path(__file__).with_name(".env")      # connectors/.env, whichever directory the adapter runs from
+
+
+def load_env_file(path: str | Path = ENV_FILE) -> None:
+    """KEY=value lines into os.environ; variables that are already set win.
+
+    Started by `uv run mini-cortex`, an adapter runs in the app's working directory, so a `.env` relative to it
+    would be the app's file. The app hands its own connector settings over as environment variables instead."""
     p = Path(path)
     if not p.is_file():
         return
@@ -189,7 +195,7 @@ def load_env_file(path: str | Path = ".env") -> None:
 
 def main(adapter_cls: Callable[[], SourceAdapter], argv: list[str] | None = None) -> None:
     """Command line shared by every adapter: `serve` (default) or `fetch` (dry run, prints JSONL)."""
-    load_env_file()
+    load_env_file(ENV_FILE)
     env = os.environ.get
     ap = argparse.ArgumentParser(description=sys.modules[adapter_cls.__module__].__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)

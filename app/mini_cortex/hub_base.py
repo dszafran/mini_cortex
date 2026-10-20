@@ -123,22 +123,25 @@ class DevHub:
         streams = {s["name"]: s for s in p.get("streams", [])}
         session = Session(name, ws, streams)
         self.sessions[name] = session
+        # Read before the welcome goes out: once it does, the connector may push, and a pushed item must not make
+        # a first backfill look like a catch-up (see _after_hello).
+        last = {s: self.last_timestamp(name, s) for s in streams}
         result = {"protocol": PROTOCOL_VERSION, "session_id": f"s-{os.urandom(2).hex()}", "hub": "dev-hub/0.1.0",
-                  "limits": LIMITS,
-                  "streams": {s: {"accepted": True, "last_timestamp": self.last_timestamp(name, s)} for s in streams}}
+                  "limits": LIMITS, "streams": {s: {"accepted": True, "last_timestamp": last[s]} for s in streams}}
         await ws.send(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": result}))
         log.info("hello from %r: streams %s", name,
                  ", ".join(f"{s} ({v.get('kind')}, {v['capabilities'].get('time_filter')})" for s, v in streams.items()))
-        asyncio.create_task(self._after_hello(session))
+        asyncio.create_task(self._after_hello(session, last))
         return session
 
-    async def _after_hello(self, session: Session) -> None:
-        """Backfill (first time) or catch-up (reconnect) for every fetchable stream (PROTOCOL.md §7.2)."""
+    async def _after_hello(self, session: Session, last_seen: dict[str, str | None]) -> None:
+        """Backfill (first time) or catch-up (reconnect) for every fetchable stream (PROTOCOL.md §7.2), decided by
+        what the hub held at hello."""
         for stream, info in session.streams.items():
             if not info["capabilities"].get("fetch"):
                 continue
             now = datetime.now(UTC)
-            last = self.last_timestamp(session.name, stream)
+            last = last_seen.get(stream)
             if last:
                 since, purpose = parse_iso(last) - timedelta(minutes=5), "catchup"
             elif self.backfill_days:

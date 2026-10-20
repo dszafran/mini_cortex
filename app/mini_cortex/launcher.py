@@ -21,7 +21,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from .llm_config import REPO_ROOT
+from .llm_config import ENV_KEYS, REPO_ROOT, env_path, read_env_file
 
 log = logging.getLogger("launcher")
 CONNECTORS_DIR = REPO_ROOT / "connectors"
@@ -125,8 +125,11 @@ class Launcher:
         self.children: list[Child] = []
 
     def start(self) -> None:
-        env = {**os.environ, "HUB_URL": self.hub_url, "CONNECTOR_TOKEN": self.token, "PYTHONUNBUFFERED": "1",
-               "PYTHONIOENCODING": "utf-8"}
+        # Connector settings (REPLAY_START, SLACK_TOKEN, ...) may sit in the app's .env, wherever the app was started
+        # from; real environment variables still win. The model settings stay with the app: connectors need no key.
+        from_file = {k: v for k, v in read_env_file(env_path()).items() if k not in ENV_KEYS}
+        env = {**from_file, **os.environ, "HUB_URL": self.hub_url, "CONNECTOR_TOKEN": self.token,
+               "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
         env.pop("VIRTUAL_ENV", None)        # ours; uv would warn that it does not match the connectors' project
         for name in self.names:
             if not adapter_path(name, self.root).exists():

@@ -120,9 +120,17 @@ def read_manifest(path: Path) -> dict:
         return json.load(f)
 
 
+def same_model(a: str, b: str) -> bool:
+    """A gateway in front of a provider often prefixes its model ids: `generative-apis/qwen3-embedding-8b` there is
+    `qwen3-embedding-8b` at Scaleway, the same model. Two different prefixes (`acme/x`, `other/x`) stay different."""
+    a_ns, _, a_name = a.lower().rpartition("/")
+    b_ns, _, b_name = b.lower().rpartition("/")
+    return a_name == b_name and (a_ns == b_ns or not a_ns or not b_ns)
+
+
 def mismatch(manifest: dict, settings: LLMSettings) -> str | None:
     model, dim = manifest.get("embed_model"), manifest.get("vector_dim") or manifest.get("embed_dim")
-    if model and settings.embed_model and model != settings.embed_model:
+    if model and settings.embed_model and not same_model(model, settings.embed_model):
         return (f"snapshot was embedded with {model!r}, your EMBED_MODEL is {settings.embed_model!r}: "
                 "search will compare unrelated vectors. Switch the model in Tune → Models, or rebuild memory")
     if dim and settings.embed_dim and dim != settings.embed_dim:

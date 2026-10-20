@@ -29,7 +29,7 @@ def test_scaleway_url_from_project_and_preset_models():
     s = resolve({"SCW_SECRET_KEY": "k" * 36, "SCW_PROJECT_ID": "p-123"})
     assert s.provider == "scaleway"
     assert s.base_url == "https://api.scaleway.ai/p-123/v1"
-    assert (s.chat_model, s.embed_model, s.embed_dim) == ("glm-5.3", "qwen3-embedding-8b", 1024)
+    assert (s.chat_model, s.embed_model, s.embed_dim) == ("qwen3-235b-a22b-instruct-2507", "qwen3-embedding-8b", 1024)
     assert resolve({}).base_url == "https://api.scaleway.ai/v1"           # default project
     assert resolve({"LLM_BASE_URL": "http://x/v1"}).provider == "custom"
 
@@ -46,8 +46,18 @@ def test_env_file_roundtrip_keeps_other_lines(tmp_path):
 
 def test_env_example_parses(tmp_path):
     values = read_env_file(REPO / ".env.example")
-    assert values["SCW_PROJECT_ID"] == "" and values["CHAT_MODEL"] == "glm-5.3" and values["EMBED_DIM"] == "1024"
+    assert values["SCW_PROJECT_ID"] == "" and values["CHAT_MODEL"] == values["EXTRACT_MODEL"] == "qwen3-235b-a22b-instruct-2507" and values["EMBED_DIM"] == "1024"
     assert resolve(values).base_url == "https://api.scaleway.ai/v1"
+
+
+def test_embedding_size_zero_means_model_default(env_file):
+    """Tune → Models sends 0 for "model default": it must not turn back into the preset's 1024."""
+    scaleway = {"provider": "scaleway", "api_key": "k" * 36, "embed_model": "qwen3-embedding-8b"}
+    save_settings(SettingsUpdate(**scaleway, embed_dim=0))
+    assert load_settings().embed_dim == 0
+    save_settings(SettingsUpdate(**scaleway, embed_dim=1024))
+    assert load_settings().embed_dim == 1024
+    assert resolve({"SCW_SECRET_KEY": "k" * 36}).embed_dim == 1024      # nothing chosen yet: the preset's size
 
 
 def test_extra_ca_bundle(tmp_path):

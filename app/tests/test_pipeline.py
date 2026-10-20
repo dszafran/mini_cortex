@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mini_cortex.chat import Chat
+from mini_cortex.chat import Chat, cited_numbers
 from mini_cortex.llm_config import LLMSettings
 from mini_cortex.memory_config import load_memory_config
 from mini_cortex.packetize import build_windows, render
@@ -266,3 +266,8 @@ async def test_chat_searches_cites_and_streams(pipe):
     thread = events[0]["thread_id"]
     assert [m["role"] for m in pipe.state.messages(thread)] == ["user", "assistant"]
     assert pipe.packets.all()[0]["access_count"] == 1
+
+
+def test_grouped_citations_count():
+    """Models sometimes write [3, 5] although the prompt asks for [3][5]: both cite 3 and 5."""
+    assert cited_numbers("Phone only [3, 5], via Anni [1][4]; see [2,6]. Not a citation: [x], [ 7 ].") == {1, 2, 3, 4, 5, 6}
