@@ -21,6 +21,7 @@ class Upstream:
         self.ignore_dims = False      # behave like a server that ignores `dimensions`
         self.no_tools = False         # model answers in text instead of calling the tool
         self.stall = 0                # leave this many chat requests unanswered (a flaky gateway)
+        self.no_credit = False        # answer 402, like OpenRouter when the key's credit is used up
         self.requests: list[dict] = []
 
 
@@ -31,7 +32,13 @@ def stub_app(up: Upstream) -> FastAPI:
     async def auth(request: Request, call_next):
         if request.headers.get("authorization") != f"Bearer {GOOD_KEY}":
             return JSONResponse({"error": {"message": "Invalid API key", "type": "invalid_request_error"}}, 401)
+        if up.no_credit and request.method == "POST":
+            return JSONResponse({"error": {"message": "Insufficient credits", "code": 402}}, 402)
         return await call_next(request)
+
+    @app.get("/v1/embeddings/models")       # OpenRouter lists its embedding models apart from /models
+    async def embedding_models():
+        return {"data": [{"id": "qwen/qwen3-embedding-8b"}]}
 
     @app.get("/v1/models")
     async def models():
@@ -90,7 +97,7 @@ def server():
 @pytest.fixture
 def upstream(server):
     up, url = server
-    up.no_json_schema = up.ignore_dims = up.no_tools = False
+    up.no_json_schema = up.ignore_dims = up.no_tools = up.no_credit = False
     up.stall = 0
     up.requests.clear()
     return up, url

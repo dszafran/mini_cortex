@@ -3,9 +3,10 @@
 Everything lives in the repo-root `.env` (override the path with MINI_CORTEX_ENV). Real environment variables win
 over the file, so the UI reports them as "overridden" instead of silently ignoring a save.
 
-    LLM_PROVIDER    scaleway | ollama | custom
+    LLM_PROVIDER    scaleway | openrouter | ollama | custom
     SCW_SECRET_KEY  Scaleway API key       } the same variables OpenCode's Scaleway provider reads,
     SCW_PROJECT_ID  Scaleway project id    } so one key serves both
+    OPENROUTER_API_KEY  OpenRouter key (the workshop's backup provider; OpenCode reads it too)
     LLM_BASE_URL    any OpenAI-compatible /v1 URL (ollama, custom)
     LLM_API_KEY     key for LLM_BASE_URL
     CHAT_MODEL      answers questions in chat (tool calling)
@@ -29,6 +30,7 @@ from pydantic import BaseModel
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCALEWAY_URL = "https://api.scaleway.ai/v1"
+OPENROUTER_URL = "https://openrouter.ai/api/v1"
 
 
 class Preset(BaseModel):
@@ -51,6 +53,14 @@ PRESETS: dict[str, Preset] = {
         key_help="Scaleway console → IAM → API keys. The key's policy needs Generative APIs access in this project.",
         chat_model="qwen3-235b-a22b-instruct-2507", extract_model="qwen3-235b-a22b-instruct-2507",
         embed_model="qwen3-embedding-8b", embed_dim=1024),
+    # The backup when Scaleway is out of quota. Same models, so a memory embedded at Scaleway keeps working: measured
+    # cosine 0.996-0.9999 between Scaleway's and OpenRouter's qwen3-embedding-8b vectors of the same text.
+    "openrouter": Preset(
+        id="openrouter", label="OpenRouter (backup)", base_url=OPENROUTER_URL, needs_key=True,
+        key_env="OPENROUTER_API_KEY",
+        key_help="Use the key your instructor gives you, or your own from openrouter.ai → Keys.",
+        chat_model="qwen/qwen3-235b-a22b-2507", extract_model="qwen/qwen3-235b-a22b-2507",
+        embed_model="qwen/qwen3-embedding-8b", embed_dim=1024),
     "ollama": Preset(
         id="ollama", label="Ollama (local)", base_url="http://localhost:11434/v1", needs_key=False, key_env="LLM_API_KEY",
         key_help="No key needed. Pull the models first, e.g. `ollama pull qwen3:8b`."),
@@ -161,7 +171,7 @@ def _quote(v: str) -> str:
 
 # --- resolution -----------------------------------------------------------------------------------------
 
-ENV_KEYS = ("LLM_PROVIDER", "LLM_BASE_URL", "LLM_API_KEY", "SCW_SECRET_KEY", "SCW_PROJECT_ID",
+ENV_KEYS = ("LLM_PROVIDER", "LLM_BASE_URL", "LLM_API_KEY", "SCW_SECRET_KEY", "SCW_PROJECT_ID", "OPENROUTER_API_KEY",
             "CHAT_MODEL", "EXTRACT_MODEL", "EMBED_MODEL", "EMBED_DIM", "EMBED_BASE_URL", "LLM_CA_BUNDLE")
 
 
@@ -188,6 +198,8 @@ def resolve(v: Mapping[str, str]) -> LLMSettings:
         project = v.get("SCW_PROJECT_ID", "")
         base_url = f"https://api.scaleway.ai/{project}/v1" if project else SCALEWAY_URL
         api_key = v.get("SCW_SECRET_KEY", "")
+    elif provider == "openrouter":               # a fixed URL and its own key: switching back keeps every key
+        project, base_url, api_key = "", OPENROUTER_URL, v.get("OPENROUTER_API_KEY", "")
     else:
         project = ""
         base_url = v.get("LLM_BASE_URL") or preset.base_url
@@ -205,7 +217,8 @@ def resolve(v: Mapping[str, str]) -> LLMSettings:
 
 
 def update_to_env(u: SettingsUpdate) -> dict[str, str | None]:
-    """The .env changes for an update. Scaleway writes SCW_*, the others LLM_*; a missing key keeps the stored one."""
+    """The .env changes for an update. Scaleway writes SCW_*, OpenRouter OPENROUTER_API_KEY, the others LLM_*; a missing
+    key keeps the stored one."""
     out: dict[str, str | None] = {
         "LLM_PROVIDER": u.provider,
         "CHAT_MODEL": u.chat_model.strip(), "EXTRACT_MODEL": u.extract_model.strip(),
@@ -217,6 +230,9 @@ def update_to_env(u: SettingsUpdate) -> dict[str, str | None]:
         out["SCW_PROJECT_ID"] = u.project_id.strip() or None
         if u.api_key:
             out["SCW_SECRET_KEY"] = u.api_key.strip()
+    elif u.provider == "openrouter":
+        if u.api_key:
+            out["OPENROUTER_API_KEY"] = u.api_key.strip()
     else:
         out["LLM_BASE_URL"] = u.base_url.strip() or None
         if u.api_key:

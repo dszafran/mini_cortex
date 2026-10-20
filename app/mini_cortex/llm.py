@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import re
 import ssl
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -35,6 +36,12 @@ QUERY_PREFIX = "search_query: "
 
 FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.S)
 
+# OpenRouter sends each request to one of several providers. Chat and extraction only go to providers that support
+# every parameter sent (tools, json_schema): one of the seven qwen3-235b endpoints has neither. Embeddings go first to
+# the providers whose qwen3-embedding-8b vectors matched Scaleway's (cosine 0.9999; DeepInfra, the fallback, 0.996).
+OPENROUTER_CHAT = {"extra_body": {"provider": {"require_parameters": True}}}
+OPENROUTER_EMBED = {"extra_body": {"provider": {"order": ["nebius", "siliconflow"]}}}
+
 
 def strip_fences(text: str) -> str:
     m = FENCE.match(text or "")
@@ -53,6 +60,18 @@ class Stalled(TimeoutError):
     """No complete answer within the deadline, on every try."""
 
 
+class OutOfCredits(RuntimeError):
+    """HTTP 402: the key has no credit left (OpenRouter), so every other call would fail the same way."""
+
+
+def cut(vector: list[float], n: int) -> list[float]:
+    """A Matryoshka embedding at a smaller size: the first n values, renormalized. This is what a server that honours
+    `dimensions` returns (measured: cosine 0.9999 against Scaleway's own 1024-dim vectors)."""
+    head = vector[:n]
+    length = math.sqrt(sum(x * x for x in head)) or 1.0
+    return [x / length for x in head]
+
+
 class LLM:
     def __init__(self, settings: LLMSettings, timeout: float = 60, max_retries: int = 2,
                  deadline: float | None = None, stall_retries: int = 2):
@@ -63,14 +82,27 @@ class LLM:
         self.deadline, self.stall_retries = deadline, stall_retries
         # Local servers accept any key, but the SDK refuses an empty one.
         key = settings.api_key or "not-needed"
-        http = httpx.AsyncClient(verify=ssl_context(settings.ca_bundle), timeout=timeout)
-        self.client = AsyncOpenAI(base_url=settings.base_url, api_key=key, max_retries=max_retries, http_client=http)
+        self.http = httpx.AsyncClient(verify=ssl_context(settings.ca_bundle), timeout=timeout)
+        self.client = AsyncOpenAI(base_url=settings.base_url, api_key=key, max_retries=max_retries,
+                                  http_client=self.http)
         self.embed_client = (AsyncOpenAI(base_url=settings.embed_base_url, api_key=key, max_retries=max_retries,
-                                         http_client=http) if settings.embed_base_url else self.client)
+                                         http_client=self.http) if settings.embed_base_url else self.client)
         self.native_json: bool | None = None   # learnt on first extract: does the server do json_schema?
         self.send_dimensions = True            # dropped if the embedding server rejects `dimensions`
+        self.cut_from: int | None = None       # the size the server returned when it ignored `dimensions`
+        openrouter = settings.provider == "openrouter"
+        self.chat_extra = OPENROUTER_CHAT if openrouter else {}
+        self.embed_extra = OPENROUTER_EMBED if openrouter and not settings.embed_base_url else {}
 
     async def _call[R](self, make: Callable[[], Awaitable[R]]) -> R:
+        try:
+            return await self._within_deadline(make)
+        except openai.APIStatusError as e:
+            if e.status_code == 402:
+                raise OutOfCredits(e.message) from e
+            raise
+
+    async def _within_deadline[R](self, make: Callable[[], Awaitable[R]]) -> R:
         if not self.deadline:
             return await make()
         for attempt in range(1, self.stall_retries + 2):
@@ -83,7 +115,13 @@ class LLM:
     # --- models -----------------------------------------------------------------------------------------
 
     async def list_models(self) -> list[str]:
-        return sorted([m.id async for m in self.client.models.list()])
+        ids = [m.id async for m in self.client.models.list()]
+        if self.s.provider == "openrouter":            # OpenRouter lists its embedding models apart from the others
+            r = await self.http.get(f"{self.s.base_url}/embeddings/models",
+                                    headers={"Authorization": f"Bearer {self.client.api_key}"})
+            r.raise_for_status()
+            ids += [m["id"] for m in r.json().get("data", [])]
+        return sorted(set(ids))
 
     # --- chat -------------------------------------------------------------------------------------------
 
@@ -93,13 +131,14 @@ class LLM:
         if tools:
             kwargs["tools"] = tools
         r = await self._call(lambda: self.client.chat.completions.create(model=model or self.s.chat_model,
-                                                                         messages=messages, **kwargs))
+                                                                         messages=messages, **self.chat_extra,
+                                                                         **kwargs))
         return r.choices[0].message
 
     async def stream(self, messages: list[dict], *, model: str | None = None, **kwargs: Any) -> AsyncIterator[str]:
         """Text deltas as they arrive."""
         s = await self.client.chat.completions.create(model=model or self.s.chat_model, messages=messages,
-                                                      stream=True, **kwargs)
+                                                      stream=True, **self.chat_extra, **kwargs)
         async for chunk in s:
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
@@ -127,7 +166,8 @@ class LLM:
                                            model: str | None = None, **kwargs: Any) -> T:
         rf = {"type": "json_schema", "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()}}
         r = await self._call(lambda: self.client.chat.completions.create(
-            model=model or self.s.extract_model, messages=messages, response_format=rf, temperature=0, **kwargs))
+            model=model or self.s.extract_model, messages=messages, response_format=rf, temperature=0,
+            **self.chat_extra, **kwargs))
         return schema.model_validate_json(strip_fences(r.choices[0].message.content))
 
     async def extract_prompted[T: BaseModel](self, messages: list[dict], schema: type[T], *,
@@ -137,7 +177,7 @@ class LLM:
         msgs = [*messages, {"role": "system", "content": instruction}]
         for attempt in range(attempts):
             r = await self._call(lambda: self.client.chat.completions.create(
-                model=model or self.s.extract_model, messages=msgs, temperature=0, **kwargs))
+                model=model or self.s.extract_model, messages=msgs, temperature=0, **self.chat_extra, **kwargs))
             text = r.choices[0].message.content or ""
             try:
                 return schema.model_validate_json(strip_fences(text))
@@ -158,11 +198,17 @@ class LLM:
             kwargs["dimensions"] = self.s.embed_dim
         try:
             r = await self._call(lambda: self.embed_client.embeddings.create(model=self.s.embed_model, input=inputs,
-                                                                             **kwargs))
+                                                                             **self.embed_extra, **kwargs))
         except openai.BadRequestError as e:
             if "dimensions" not in kwargs or "dimension" not in str(e).lower():
                 raise
             log.info("embedding server rejects `dimensions`; using the model's native size")
             self.send_dimensions = False
-            r = await self._call(lambda: self.embed_client.embeddings.create(model=self.s.embed_model, input=inputs))
-        return [d.embedding for d in sorted(r.data, key=lambda d: d.index)]
+            r = await self._call(lambda: self.embed_client.embeddings.create(model=self.s.embed_model, input=inputs,
+                                                                             **self.embed_extra))
+        vectors = [d.embedding for d in sorted(r.data, key=lambda d: d.index)]
+        if self.s.embed_dim and vectors and len(vectors[0]) > self.s.embed_dim:
+            # The server ignored `dimensions`: cut here instead, so changing provider never breaks a memory.
+            self.cut_from = len(vectors[0])
+            vectors = [cut(v, self.s.embed_dim) for v in vectors]
+        return vectors

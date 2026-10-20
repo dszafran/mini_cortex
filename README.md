@@ -53,4 +53,6 @@ use the finished version of the step (`…-solution`) and explore it without cod
 - **Stuck, or exploring:** steps 0-4 have a finished version, e.g. `git checkout step-2-packetize-solution` (stash
   first). Step 5 is the complete app already.
 - **After every checkout:** stop the app with Ctrl+C and start it again; Python doesn't pick up code changes.
+- **If Scaleway runs out of quota**, the instructor hands out a backup key: Tune → Models → **OpenRouter (backup)**,
+  paste the key, **Test connection**, **Save**. No restart, and your memory stays: same models, same embeddings.
 - `main` is the finished app.

@@ -9,9 +9,10 @@ from conftest import GOOD_KEY
 from mini_cortex.doctor import Probe, run_checks
 import pytest
 
-from mini_cortex.llm import LLM, Stalled
-from mini_cortex.llm_config import (LLMSettings, SettingsUpdate, load_settings, raw_values, read_env_file, resolve,
-                                    save_settings, write_env_file)
+from mini_cortex.llm import LLM, OutOfCredits, Stalled, cut
+from mini_cortex.llm_config import (OPENROUTER_URL, LLMSettings, SettingsUpdate, load_settings, raw_values,
+                                    read_env_file, resolve, save_settings, write_env_file)
+from mini_cortex.pipeline import is_fatal
 from mini_cortex.llm_routes import make_router
 
 
@@ -109,6 +110,54 @@ async def test_deadline_cuts_a_stalled_call_and_retries(upstream):
     up.stall = 5
     with pytest.raises(Stalled):
         await LLM(settings(url), timeout=30, deadline=0.3, stall_retries=1).chat([{"role": "user", "content": "x"}])
+
+
+def test_openrouter_preset_keeps_its_own_key(env_file):
+    """The backup provider: a fixed URL, its own key variable, so switching back to Scaleway needs no re-entry."""
+    s = resolve({"LLM_PROVIDER": "openrouter", "OPENROUTER_API_KEY": "sk-or-1", "LLM_BASE_URL": "http://old/v1"})
+    assert (s.base_url, s.api_key, s.embed_dim) == (OPENROUTER_URL, "sk-or-1", 1024)
+    assert (s.chat_model, s.embed_model) == ("qwen/qwen3-235b-a22b-2507", "qwen/qwen3-embedding-8b")
+    save_settings(SettingsUpdate(provider="scaleway", api_key="k" * 36, embed_model="qwen3-embedding-8b", embed_dim=1024))
+    save_settings(SettingsUpdate(provider="openrouter", api_key="sk-or-2", embed_model="qwen/qwen3-embedding-8b",
+                                 embed_dim=1024, base_url=OPENROUTER_URL))
+    stored = read_env_file(env_file)
+    assert stored["OPENROUTER_API_KEY"] == "sk-or-2" and stored["SCW_SECRET_KEY"] == "k" * 36
+    assert "LLM_BASE_URL" not in stored and load_settings().api_key == "sk-or-2"
+    save_settings(SettingsUpdate(provider="scaleway", embed_model="qwen3-embedding-8b", embed_dim=1024))
+    assert load_settings().api_key == "k" * 36                          # back without re-entering the key
+
+
+async def test_openrouter_routing_and_model_list(upstream):
+    up, url = upstream
+    llm = LLM(settings(url).model_copy(update={"provider": "openrouter"}))
+    await llm.chat([{"role": "user", "content": "hi"}])
+    assert up.requests[-1]["provider"] == {"require_parameters": True}
+    await llm.extract([{"role": "user", "content": "Warsaw?"}], Probe)
+    assert up.requests[-1]["provider"] == {"require_parameters": True}
+    await llm.embed(["hello"])
+    assert up.requests[-1]["provider"]["order"][0] == "nebius"
+    assert "qwen/qwen3-embedding-8b" in await llm.list_models()
+    await LLM(settings(url)).chat([{"role": "user", "content": "hi"}])
+    assert "provider" not in up.requests[-1]                              # other providers get plain requests
+
+
+async def test_no_credit_stops_the_run(upstream):
+    up, url = upstream
+    up.no_credit = True
+    with pytest.raises(OutOfCredits) as e:
+        await LLM(settings(url)).chat([{"role": "user", "content": "hi"}])
+    assert is_fatal(e.value)                                              # Process stops instead of failing each window
+    checks = {c.name: c for c in await run_checks(settings(url))}
+    assert checks["chat"].status == "fail" and "credit" in checks["chat"].fix
+
+
+async def test_vectors_are_cut_when_the_server_ignores_dimensions(upstream):
+    up, url = upstream
+    up.ignore_dims = True
+    llm = LLM(settings(url))
+    [v] = await llm.embed(["hello"])
+    assert len(v) == 1024 and llm.cut_from == 4096
+    assert cut([3.0, 4.0, 12.0], 2) == [0.6, 0.8]                        # first n values, renormalized
 
 
 async def test_embed_prefix_and_dimensions(upstream):

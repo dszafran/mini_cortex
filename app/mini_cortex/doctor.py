@@ -19,7 +19,7 @@ from typing import Literal
 import openai
 from pydantic import BaseModel
 
-from .llm import LLM
+from .llm import LLM, OutOfCredits
 from .llm_config import LLMSettings, env_path, load_settings
 
 Status = Literal["ok", "warn", "fail", "skip"]
@@ -47,11 +47,14 @@ TIME_TOOL = {"type": "function", "function": {
     "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}}
 
 
-FATAL = (openai.AuthenticationError, openai.PermissionDeniedError, openai.APIConnectionError)
+FATAL = (openai.AuthenticationError, openai.PermissionDeniedError, openai.APIConnectionError, OutOfCredits)
 
 
 def explain(e: Exception, s: LLMSettings, model: str = "") -> str:
     """A fix for the errors people actually hit."""
+    if isinstance(e, OutOfCredits):
+        return ("No credit left on this key. Ask your instructor for another one, or switch provider in "
+                "Tune → Models.")
     if isinstance(e, openai.AuthenticationError):
         where = s.preset.key_help if s.provider == "scaleway" else "Check that it is complete and belongs to this provider."
         return f"The key was rejected. {where}"
@@ -166,6 +169,10 @@ async def run_checks(s: LLMSettings, timeout: float = 30) -> list[Check]:
 
     async def embeddings():
         [vec] = await llm.embed(["mini-cortex doctor"], kind="raw")
+        if llm.cut_from:
+            return ("warn", f"{s.embed_model}: {len(vec)} dims, cut here from {llm.cut_from}",
+                    "The server ignores `dimensions`, so the app cuts the vectors itself: right for Matryoshka models "
+                    f"such as qwen3-embedding-8b. For another model, set the embedding size to {llm.cut_from}.")
         if s.embed_dim and len(vec) != s.embed_dim:
             return ("warn", f"{s.embed_model}: got {len(vec)} dims, asked for {s.embed_dim}",
                     f"The server ignores `dimensions`. Set the embedding size to {len(vec)}.")

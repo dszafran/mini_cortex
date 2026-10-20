@@ -31,6 +31,7 @@ class FakeLLM:
 
     def __init__(self, chat_script=None):
         self.s = SimpleNamespace(chat_model="fake-chat")
+        self.chat_extra = {}                  # the real LLM's OpenRouter routing; nothing to route here
         self.chat_script = chat_script or []
         self.client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=self._create)))
         self.calls = []

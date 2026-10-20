@@ -69,8 +69,9 @@ def test_bad_names(tmp_path):
             snapshot.save(name, tmp_path, SETTINGS, tmp_path / "snapshots")
 
 
-def test_a_gateway_prefix_is_the_same_model(tmp_path):
-    """Built behind a gateway that names the model `generative-apis/emb-a`, loaded by someone who calls it `emb-a`."""
+def test_a_gateway_or_vendor_prefix_is_the_same_model(tmp_path):
+    """Built behind a gateway that names the model `generative-apis/emb-a`, loaded at a provider that calls it `emb-a`
+    or `vendor/emb-a` (OpenRouter's style)."""
     data, root = tmp_path / "data", tmp_path / "snapshots"
     make_memory(data)
     snapshot.save("day1", data, SETTINGS.model_copy(update={"embed_model": "generative-apis/emb-a"}), root)
@@ -78,5 +79,5 @@ def test_a_gateway_prefix_is_the_same_model(tmp_path):
     assert warning is None
     _, warning = snapshot.load("day1", data, SETTINGS.model_copy(update={"embed_model": "emb-b"}), root)
     assert "generative-apis/emb-a" in warning
-    _, warning = snapshot.load("day1", data, SETTINGS.model_copy(update={"embed_model": "other/emb-a"}), root)
-    assert "other/emb-a" in warning                          # another gateway's emb-a may be another model
+    _, warning = snapshot.load("day1", data, SETTINGS.model_copy(update={"embed_model": "vendor/emb-a"}), root)
+    assert warning is None

@@ -121,11 +121,10 @@ def read_manifest(path: Path) -> dict:
 
 
 def same_model(a: str, b: str) -> bool:
-    """A gateway in front of a provider often prefixes its model ids: `generative-apis/qwen3-embedding-8b` there is
-    `qwen3-embedding-8b` at Scaleway, the same model. Two different prefixes (`acme/x`, `other/x`) stay different."""
-    a_ns, _, a_name = a.lower().rpartition("/")
-    b_ns, _, b_name = b.lower().rpartition("/")
-    return a_name == b_name and (a_ns == b_ns or not a_ns or not b_ns)
+    """Gateways and vendors both prefix model ids: `qwen3-embedding-8b` at Scaleway, `generative-apis/...` behind a
+    gateway in front of it and `qwen/...` at OpenRouter are one model (measured: cosine 0.996-0.9999 between their
+    vectors of the same text). So only the name after the last slash counts; the size is checked separately."""
+    return a.rsplit("/", 1)[-1].lower() == b.rsplit("/", 1)[-1].lower()
 
 
 def mismatch(manifest: dict, settings: LLMSettings) -> str | None:

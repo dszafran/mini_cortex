@@ -61,7 +61,9 @@ uv run pytest          # stub OpenAI-compatible server, a real SDK connector end
 ```
 
 Scaleway uses `SCW_SECRET_KEY` and `SCW_PROJECT_ID`, the same variables OpenCode's Scaleway provider reads, so one key
-serves both. The base URL is `https://api.scaleway.ai/<project id>/v1`. Any other OpenAI-compatible server (a vLLM
+serves both. The base URL is `https://api.scaleway.ai/<project id>/v1`. The backup preset, OpenRouter, uses
+`OPENROUTER_API_KEY` (OpenCode reads it too) and the same models under OpenRouter's names; its requests only go to
+providers that support tools and structured output. Any other OpenAI-compatible server (a vLLM
 deployment, Ollama, LM Studio, OpenAI) works with `LLM_PROVIDER=custom` + `LLM_BASE_URL` + `LLM_API_KEY`.
 
 ## The key
