@@ -262,9 +262,14 @@ class ReplayAdapter(SourceAdapter):
         return out
 
     async def fetch_window(self, stream: str, since: datetime, until: datetime) -> list[dict]:
-        now = self.now()
-        return [await self.to_item(stream, (r, ts)) for r, ts in self.records(stream)
-                if since <= ts < until and ts <= now]
+        # TODO(workshop:builder) step 1: answer the hub's "give me this time window" (protocol `fetch`).
+        # - self.records(stream) gives every story item of the stream as (record, shifted timestamp) pairs.
+        # - Keep the ones with since <= timestamp < until (half-open: an item exactly at `until` belongs to the
+        #   next window) AND timestamp <= self.now() (the story's future must stay hidden).
+        # - Map each kept pair to an IngestItem with: await self.to_item(stream, (record, timestamp))
+        # Paging, sorting and cursors are done for you by SourceAdapter.fetch() (connectors/source_adapter.py).
+        # Check: uv run python replay_adapter.py fetch --days 7   ·   uv run pytest -q tests/test_replay_adapter.py
+        return []
 
     # --- duty 4 -----------------------------------------------------------------------------------------------
 
