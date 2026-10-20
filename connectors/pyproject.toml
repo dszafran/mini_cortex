@@ -1,0 +1,25 @@
+[project]
+name = "mini-cortex-connectors"
+version = "0.1.0"
+description = "Universal connector interface (SourceAdapter) for mini-cortex, plus source adapters (Slack, ...)."
+requires-python = ">=3.12"
+dependencies = [
+    "websockets>=13",
+    "httpx>=0.27",
+    "tzdata; sys_platform == 'win32'",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

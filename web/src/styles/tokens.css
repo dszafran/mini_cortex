@@ -1,0 +1,67 @@
+/* Design tokens. Dark is the default (UI-DECISIONS D1); light applies under [data-theme="light"].
+   Colour carries meaning only: one accent for interaction, other hues for packet types and verdicts (D3). */
+:root {
+  --bg: #0e1014;
+  --surface: #15181e;
+  --sunk: #1b1f27;
+  --line: #262b35;
+  --line-strong: #343a47;
+  --fg: #e7e9ee;
+  --muted: #a0a7b5;
+  --faint: #6c7383;
+  --accent: #8d9cff;
+  --accent-soft: #232a4d;
+  --on-accent: #0e1014;
+  --ok: #5cc28a;
+  --warn: #e0aa4c;
+  --bad: #ec7a6e;
+
+  --t-fact: #8fb0cf;
+  --t-event: #6cc3cd;
+  --t-decision: #8d9cff;
+  --t-person: #c79ad8;
+  --t-preference: #e0a56b;
+  --t-reference: #a5c47e;
+  --t-warning: #ec7a6e;
+  --t-commitment: #cdbb72;
+  --t-summary: #b8bfcc;
+
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 18px 48px -24px rgb(0 0 0 / 0.6);
+
+  --f-display: 'Bricolage Grotesque Variable', 'Hanken Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+  --f-body: 'Hanken Grotesk Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --bg: #f4f5f8;
+  --surface: #ffffff;
+  --sunk: #f0f2f6;
+  --line: #e2e5ec;
+  --line-strong: #cfd4de;
+  --fg: #15171c;
+  --muted: #5f6676;
+  --faint: #969cab;
+  --accent: #3045c6;
+  --accent-soft: #e7eafb;
+  --on-accent: #ffffff;
+  --ok: #2d8656;
+  --warn: #a8721a;
+  --bad: #b5443a;
+
+  --t-fact: #4a6b8a;
+  --t-event: #2b7f8a;
+  --t-decision: #3045c6;
+  --t-person: #8a5a9e;
+  --t-preference: #a0662b;
+  --t-reference: #5e7a3a;
+  --t-warning: #b5443a;
+  --t-commitment: #7a6a2a;
+  --t-summary: #5f6676;
+
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 18px 48px -24px rgb(20 30 80 / 0.25);
+
+  color-scheme: light;
+}

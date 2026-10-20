@@ -1,0 +1,46 @@
+# Slack app for the mini-cortex Slack adapter (slack_adapter.py). Read-only.
+# https://api.slack.com/apps → Create New App → From a manifest → pick your workspace → paste this.
+#
+# After installing, pick ONE token for SLACK_TOKEN:
+#   bot  token  (OAuth & Permissions → Bot User OAuth Token,  xoxb-…): public channels only, the bot joins them
+#   user token  (OAuth & Permissions → User OAuth Token,      xoxp-…): channels you're in + your DMs and group DMs
+# For real-time push also set SLACK_APP_TOKEN: Basic Information → App-Level Tokens → Generate,
+# scope connections:write (xapp-…). Without it the adapter polls every 20 s.
+display_information:
+  name: Mini Cortex
+  description: Lets your mini-cortex read your Slack (read-only)
+features:
+  bot_user:
+    display_name: mini-cortex
+    always_online: false
+oauth_config:
+  scopes:
+    bot:
+      - channels:read
+      - channels:history
+      - channels:join      # the bot must be a member to read a channel
+      - users:read
+    user:
+      - channels:read
+      - channels:history
+      - groups:read        # private channels
+      - groups:history
+      - im:read            # direct messages
+      - im:history
+      - mpim:read          # group DMs
+      - mpim:history
+      - users:read
+settings:
+  event_subscriptions:
+    bot_events:
+      - message.channels
+    user_events:           # delivered for conversations the authorizing user is in
+      - message.channels
+      - message.groups
+      - message.im
+      - message.mpim
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false

@@ -1,0 +1,27 @@
+# secrets
+.env
+!.env.example
+
+# python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+
+# node
+node_modules/
+.vite/
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+
+# local worktrees
+.claude/worktrees/
+
+# mini-cortex memory (SQLite + LanceDB); .data.prev = the memory before the last `snapshot load`
+.data/
+.data.*/
+snapshots/*.partial

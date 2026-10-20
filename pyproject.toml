@@ -1,0 +1,18 @@
+# Lets participants run the app from the repo root: `uv run mini-cortex`, `uv run doctor`.
+# A uv workspace with app/ as its only member: one lock (uv.lock here), one .venv here, and `cd app && uv run ...`
+# uses the same environment. connectors/ stays a separate project (the launcher runs it with its own deps).
+[project]
+name = "mini-cortex-workshop"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["mini-cortex"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+mini-cortex = { workspace = true }
+
+[tool.uv.workspace]
+members = ["app"]
+exclude = ["connectors", "mattermost-kit"]

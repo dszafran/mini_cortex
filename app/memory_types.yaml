@@ -1,0 +1,49 @@
+# What memory keeps, and how the pipeline behaves. Edit, then Rebuild memory on the Memory screen to compare.
+# The extraction prompt and the structured-output schema (the `type` enum) are generated from `types`.
+
+types:
+  - name: fact
+    definition: A durable fact, observation or piece of context worth remembering.
+    example: "Skyrill charges €0.009/MB and has no CH/IT roaming surcharge."
+    enabled: true
+  - name: event
+    definition: Something that happened or will happen at a specific time (meeting, deadline, outage, trip, delivery).
+    example: "Gruenmatt renewal meeting on Wed 21 Oct at 10:00 in Obermatt."
+    enabled: true
+  - name: decision
+    definition: A choice that was made, with its reason if known.
+    example: "Night economy mode cancelled: 62% of calvings start at night."
+    enabled: true
+  - name: person
+    definition: Who someone is, their role, or their relationship to the user.
+    example: "Helga Moser chairs the Gruenmatt cooperative and signs the renewal."
+    enabled: true
+  - name: preference
+    definition: A like, dislike, habit or constraint (the user's or someone else's).
+    example: "Sepp Gruber wants phone calls, not email, ideally 12:00-13:00."
+    enabled: true
+  - name: reference
+    definition: A link, document, file or other resource, and what it is for.
+    example: "Runbook for APN fallback: confluence page 'OTA APN switch'."
+    enabled: true
+  - name: warning
+    definition: A risk, gotcha or thing to watch out for.
+    example: "Firmware below 4.1 (~1,100 collars) must update before the SIM migration."
+    enabled: true
+  - name: commitment
+    definition: A promise someone made, with who owes it and by when if known.
+    example: "Tess sends the Alpenvox non-renewal notice by Sun 18 Oct."
+    enabled: true
+
+pipeline:
+  theta: 0.86             # dedup: neighbours at or above this cosine go to the model for a verdict
+  neighbours: 5           # how many neighbours to compare
+  buffer_messages: 5      # live chat: flush a conversation after this many new messages...
+  buffer_seconds: 20      # ...or this many seconds after its first unprocessed message
+  window_gap_minutes: 240 # a pause this long starts a new window (Cortex: 15 for busy team chats; quieter
+                          # sources read better with more context per call)
+  window_max_items: 50    # a window also closes at chunk_chars of text
+  context_items: 10       # already-processed messages shown before the new ones, for references only
+  chunk_chars: 24000      # long single items are split...
+  chunk_overlap: 2000     # ...with this overlap
+  parallel_windows: 6     # extraction calls in flight during Process
