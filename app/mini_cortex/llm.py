@@ -208,6 +208,9 @@ class LLM:
                 out = await self.extract_native(messages, schema, model=model, **kwargs)
                 self.native_json = True
                 return out
+            except NotImplementedError:
+                log.info("extract_native() is still a TODO (step 0); using prompt + parse")
+                self.native_json = False
             except openai.BadRequestError as e:
                 if self.native_json:
                     raise
@@ -217,11 +220,16 @@ class LLM:
 
     async def extract_native[T: BaseModel](self, messages: list[dict], schema: type[T], *,
                                            model: str | None = None, **kwargs: Any) -> T:
-        rf = {"type": "json_schema", "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()}}
-        r = await self.call(lambda: self.client.chat.completions.create(
-            model=model or self.s.extract_model, messages=messages, response_format=rf, temperature=0,
-            **self.chat_extra, **kwargs))
-        return schema.model_validate_json(strip_fences(r.choices[0].message.content))
+        # TODO(workshop:builder) step 0 (optional): structured output with the server's guided decoding.
+        # 1. Build the response format: {"type": "json_schema",
+        #                                "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()}}
+        # 2. Call the model through self.call (it adds the deadline, retries and waits out rate limits):
+        #       r = await self.call(lambda: self.client.chat.completions.create(
+        #           model=model or self.s.extract_model, messages=messages, response_format=..., temperature=0,
+        #           **self.chat_extra, **kwargs))     (chat_extra: OpenRouter's routing; empty elsewhere)
+        # 3. Validate the reply: schema.model_validate_json(strip_fences(r.choices[0].message.content))
+        # Done when `uv run doctor` shows "structured output ✔ json_schema". Until then extract() uses prompt + parse.
+        raise NotImplementedError("step 0 TODO: extract_native()")
 
     async def extract_prompted[T: BaseModel](self, messages: list[dict], schema: type[T], *,
                                              model: str | None = None, attempts: int = 2, **kwargs: Any) -> T:

@@ -161,6 +161,10 @@ async def run_checks(s: LLMSettings, timeout: float = 30) -> list[Check]:
         try:
             p = await llm.extract_native(q, Probe)
             return "ok", f"{s.extract_model}: json_schema · {p.city}, {len(p.landmarks)} landmarks", ""
+        except NotImplementedError:
+            p = await llm.extract_prompted(q, Probe)
+            return ("warn", f"{s.extract_model}: prompt + parse works; json_schema is still a TODO",
+                    "Workshop step 0 (optional): implement extract_native() in app/mini_cortex/llm.py.")
         except (openai.BadRequestError, ValueError) as native_err:
             p = await llm.extract_prompted(q, Probe)
             return ("warn", f"{s.extract_model}: json_schema refused ({short(native_err)[:80]}); prompt + parse works",
