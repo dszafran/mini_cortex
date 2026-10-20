@@ -21,6 +21,9 @@ node_modules/
 # local worktrees
 .claude/worktrees/
 
+# connector push cursors (written to the directory the app was started from)
+.*_state.json
+
 # mini-cortex memory (SQLite + LanceDB); .data.prev = the memory before the last `snapshot load`
 .data/
 .data.*/

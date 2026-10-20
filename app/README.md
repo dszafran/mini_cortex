@@ -15,7 +15,7 @@ From the repo root or from `app/` (the root `pyproject.toml` makes `app/` a uv w
 
 ```bash
 uv run mini-cortex                                  # UI and API on http://127.0.0.1:8787, hub on :8765
-uv run mini-cortex --connector slack                # also start connectors/slack_adapter.py (repeatable)
+uv run mini-cortex --connector slack                # slack instead of the replay story (repeat --connector for more)
 MINI_CORTEX_CONNECTORS=replay,slack uv run mini-cortex
 uv run mini-cortex --backfill-days 30 --data /tmp/other-memory --port 8797 --hub-port 8798
 uv run mini-cortex snapshot save day1               # app stopped; packs .data into <repo>/snapshots/day1.tar.gz

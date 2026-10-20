@@ -73,6 +73,16 @@ def load_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def render_dates(text: str, d0: date) -> str:
+    """`{D+5}` -> "Sat 25 Oct", `{D-3 10:00}` -> "Fri 17 Oct, 10:00" (relative to D0). Also used by the app's
+    golden questions, so their expected dates follow the story."""
+    def sub(m: re.Match) -> str:
+        day = d0 + timedelta(days=int(m.group(1)))
+        s = f"{day:%a} {day.day} {day:%b}"
+        return f"{s}, {m.group(2)}" if m.group(2) else s
+    return DATE_TOKEN.sub(sub, text)
+
+
 def csv_env(name: str) -> set[str]:
     return {v.strip().lstrip("#") for v in os.environ.get(name, "").split(",") if v.strip()}
 
@@ -176,12 +186,7 @@ class ReplayAdapter(SourceAdapter):
         return self._note_item(r, ts)
 
     def render(self, text: str) -> str:
-        """`{D+5}` -> "Sat 25 Oct", `{D-3 10:00}` -> "Fri 17 Oct, 10:00" (relative to REPLAY_D0)."""
-        def sub(m: re.Match) -> str:
-            day = self.d0 + timedelta(days=int(m.group(1)))
-            s = f"{day:%a} {day.day} {day:%b}"
-            return f"{s}, {m.group(2)}" if m.group(2) else s
-        return DATE_TOKEN.sub(sub, text)
+        return render_dates(text, self.d0)
 
     def author(self, persona_id: str) -> dict:
         p = self.personas.get(persona_id)

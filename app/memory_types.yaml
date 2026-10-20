@@ -8,7 +8,7 @@ types:
     enabled: true
   - name: event
     definition: Something that happened or will happen at a specific time (meeting, deadline, outage, trip, delivery).
-    example: "Gruenmatt renewal meeting on Wed 21 Oct at 10:00 in Obermatt."
+    example: "Gruenmatt renewal meeting on Wed 28 Oct at 10:00 in Obermatt."
     enabled: true
   - name: decision
     definition: A choice that was made, with its reason if known.
@@ -32,7 +32,7 @@ types:
     enabled: true
   - name: commitment
     definition: A promise someone made, with who owes it and by when if known.
-    example: "Tess sends the Alpenvox non-renewal notice by Sun 18 Oct."
+    example: "Tess sends the Alpenvox non-renewal notice by Sun 25 Oct."
     enabled: true
 
 pipeline:
