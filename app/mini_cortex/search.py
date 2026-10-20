@@ -13,15 +13,15 @@ from .store import PacketStore
 RRF_K = 60
 
 
-# EXPLORE: compare this hand-written RRF with LanceDB's built-in hybrid query + RRFReranker.
 def rrf(*ranked: list[dict], k: int = RRF_K) -> list[dict]:
-    scores: dict[str, float] = {}
-    first_seen: dict[str, dict] = {}
-    for results in ranked:
-        for rank, p in enumerate(results, 1):
-            scores[p["id"]] = scores.get(p["id"], 0.0) + 1.0 / (k + rank)
-            first_seen.setdefault(p["id"], p)
-    return [first_seen[i] | {"_rrf": s} for i, s in sorted(scores.items(), key=lambda kv: -kv[1])]
+    # TODO(workshop:builder) step 4 (1/3): Reciprocal Rank Fusion of the vector results and the full-text results.
+    # Each argument is a list of packets, best first. For every list and every packet at position rank (1, 2, ...):
+    #       score[packet id] += 1 / (k + rank)
+    # A packet found by both lists gets two contributions and rises to the top. Return the packets (each once),
+    # highest score first, with the score attached as packet | {"_rrf": score}.
+    # Until then: only the vector results are used, so exact names and IDs ("AT-4471", "4.2.2") are often missed.
+    # Stretch: compare with LanceDB's built-in hybrid query + RRFReranker.
+    return list(ranked[0]) if ranked else []
 
 
 def where_clause(type_: str | None, date_from: str | None, date_to: str | None) -> str:
