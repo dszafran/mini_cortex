@@ -178,7 +178,8 @@ def serve(args: argparse.Namespace) -> None:
     hub_url = f"ws://{args.host}:{args.hub_port}/connectors"
     static = static_dir()
     app = make_app(hub, hub_url, static)
-    names = launcher.enabled(args.connector, os.environ.get("MINI_CORTEX_CONNECTORS"))
+    env_connectors = launcher.from_settings()
+    names = launcher.enabled(args.connector, env_connectors)
     children = launcher.Launcher(names, hub_url, args.token)
 
     async def run() -> None:
@@ -198,6 +199,7 @@ def serve(args: argparse.Namespace) -> None:
             if server.started:
                 snapshot.write_lock(data, args.host, args.port)
                 log.info("open http://%s:%d", args.host, args.port)
+                log.info(launcher.why(names, args.connector, env_connectors))
                 if names:
                     children.start()
                 else:

@@ -45,6 +45,24 @@ def default_connectors(root: Path = CONNECTORS_DIR) -> list[str]:
     return ["replay"] if adapter_path("replay", root).exists() else []
 
 
+def from_settings() -> str | None:
+    """MINI_CORTEX_CONNECTORS from the environment, else from the app's .env, so `replay,slack` can be set once."""
+    return os.environ.get("MINI_CORTEX_CONNECTORS", read_env_file(env_path()).get("MINI_CORTEX_CONNECTORS"))
+
+
+def why(names: list[str], cli: list[str] | None, env: str | None, root: Path = CONNECTORS_DIR) -> str:
+    """One startup line: which connectors run, why, and how to change it (--connector replaces the default)."""
+    if cli:
+        source = "from --connector"
+    elif env is not None:
+        source = "from MINI_CORTEX_CONNECTORS"
+    else:
+        source = "the default; for more: --connector NAME or MINI_CORTEX_CONNECTORS=replay,slack in .env"
+    left_out = [n for n in default_connectors(root) if n not in names]
+    off = f" · {', '.join(left_out)} is off (list it too to keep it)" if left_out else ""
+    return f"connectors: {', '.join(names) or 'none'} ({source}){off}"
+
+
 def enabled(cli: list[str] | None, env: str | None, root: Path = CONNECTORS_DIR) -> list[str]:
     """--connector beats MINI_CORTEX_CONNECTORS (an empty value = none) beats the default. "none" disables all."""
     if cli:
