@@ -22,6 +22,7 @@ class Upstream:
         self.no_tools = False         # model answers in text instead of calling the tool
         self.stall = 0                # leave this many chat requests unanswered (a flaky gateway)
         self.no_credit = False        # answer 402, like OpenRouter when the key's credit is used up
+        self.rate_limited = 0         # answer this many POSTs with 429, like Scaleway's per-minute quota
         self.requests: list[dict] = []
 
 
@@ -34,6 +35,11 @@ def stub_app(up: Upstream) -> FastAPI:
             return JSONResponse({"error": {"message": "Invalid API key", "type": "invalid_request_error"}}, 401)
         if up.no_credit and request.method == "POST":
             return JSONResponse({"error": {"message": "Insufficient credits", "code": 402}}, 402)
+        if up.rate_limited > 0 and request.method == "POST":
+            up.rate_limited -= 1
+            return JSONResponse({"status": 429, "error": "INSUFFICIENT QUOTA",
+                                 "message": "You exceeded your current quota of requests per minute."}, 429,
+                                headers={"x-ratelimit-remaining-requests": "0", "x-ratelimit-reset-requests": "10ms"})
         return await call_next(request)
 
     @app.get("/v1/embeddings/models")       # OpenRouter lists its embedding models apart from /models
@@ -98,7 +104,7 @@ def server():
 def upstream(server):
     up, url = server
     up.no_json_schema = up.ignore_dims = up.no_tools = up.no_credit = False
-    up.stall = 0
+    up.stall = up.rate_limited = 0
     up.requests.clear()
     return up, url
 

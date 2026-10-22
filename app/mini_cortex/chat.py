@@ -104,9 +104,10 @@ class Chat:
 
         for round_ in range(MAX_ROUNDS):
             last = round_ == MAX_ROUNDS - 1
-            stream = await self.llm.client.chat.completions.create(
+            # Someone is waiting for this answer: wait out a rate limit for one minute at most.
+            stream = await self.llm.call(lambda: self.llm.client.chat.completions.create(
                 model=self.llm.s.chat_model, messages=msgs, stream=True, temperature=0.2, **self.llm.chat_extra,
-                **({"tools": tools, "tool_choice": "none"} if last else {"tools": tools}))
+                **({"tools": tools, "tool_choice": "none"} if last else {"tools": tools})), max_wait=65)
             said, calls = "", {}
             async for chunk in stream:
                 if not chunk.choices:

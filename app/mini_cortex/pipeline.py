@@ -57,7 +57,8 @@ class Pipeline:
         """Called again when the Models settings change."""
         self.settings = settings
         # Gateways sometimes keep a request open and never answer: give up on a call after 90 s and retry it.
-        self.llm = llm or LLM(settings, timeout=60, max_retries=2, deadline=90, stall_retries=2)
+        self.llm = llm or LLM(settings, timeout=60, max_retries=2, deadline=90, stall_retries=2,
+                              rate_limit_wait=300)   # a shared quota: wait it out, don't fail the window
         self._packets: PacketStore | None = None
 
     @property

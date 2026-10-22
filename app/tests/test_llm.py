@@ -3,13 +3,14 @@ import os
 from pathlib import Path
 
 import httpx
+import openai
 from fastapi import FastAPI
 
 from conftest import GOOD_KEY
-from mini_cortex.doctor import Probe, run_checks
+from mini_cortex.doctor import Probe, explain, run_checks
 import pytest
 
-from mini_cortex.llm import LLM, OutOfCredits, Stalled, cut
+from mini_cortex.llm import LLM, OutOfCredits, Stalled, cut, reset_seconds
 from mini_cortex.llm_config import (OPENROUTER_URL, LLMSettings, SettingsUpdate, load_settings, raw_values,
                                     read_env_file, resolve, save_settings, write_env_file)
 from mini_cortex.pipeline import is_fatal
@@ -151,6 +152,28 @@ async def test_no_credit_stops_the_run(upstream):
     assert checks["chat"].status == "fail" and "credit" in checks["chat"].fix
 
 
+async def test_rate_limit_is_waited_out(upstream, monkeypatch):
+    up, url = upstream
+    monkeypatch.setattr("mini_cortex.llm.random.uniform", lambda a, b: 0.0)
+    up.rate_limited = 4                                # more than the SDK's own 2 retries
+    llm = LLM(settings(url), max_retries=2, rate_limit_wait=30)
+    assert (await llm.chat([{"role": "user", "content": "hi"}])).content == "pong"
+    assert llm.rate_limited == 1 and up.rate_limited == 0
+    up.rate_limited = 5
+    with pytest.raises(openai.RateLimitError):         # the doctor: no waiting
+        await LLM(settings(url), max_retries=0).chat([{"role": "user", "content": "hi"}])
+
+
+def test_reset_seconds_reads_scaleway_headers():
+    def err(**headers):
+        return openai.RateLimitError("x", response=httpx.Response(429, headers=headers,
+                                     request=httpx.Request("POST", "http://x")), body=None)
+    assert reset_seconds(err(**{"x-ratelimit-reset-requests": "59s985ms"})) == pytest.approx(59.985)
+    assert reset_seconds(err(**{"x-ratelimit-reset-requests": "1m2s", "x-ratelimit-reset-tokens": "0ms"})) == 62
+    assert reset_seconds(err(**{"retry-after": "7"})) == 7
+    assert reset_seconds(err()) is None
+
+
 async def test_vectors_are_cut_when_the_server_ignores_dimensions(upstream):
     up, url = upstream
     up.ignore_dims = True
@@ -210,6 +233,20 @@ async def test_doctor_missing_settings():
 async def test_doctor_unreachable():
     checks = await run_checks(settings("http://127.0.0.1:9/v1"))
     assert checks[-1].status == "fail" and "Cannot reach" in checks[-1].fix
+
+
+def status_error(cls, status: int, message: str):
+    return cls(message, response=httpx.Response(status, request=httpx.Request("POST", "http://x/v1")), body=None)
+
+
+def test_explain_names_expiry_for_a_refused_key_and_the_model_for_a_401():
+    scw = LLMSettings(provider="scaleway", api_key="k")
+    refused = status_error(openai.PermissionDeniedError, 403, "insufficient permissions to access the resource")
+    assert "expired or been revoked" in explain(refused, scw) and "IAM" in explain(refused, scw)
+    unknown = status_error(openai.AuthenticationError, 401,
+                           "The model `glm-5.3` does not exist or is not authorized for this API key.")
+    assert "not available for this key" in explain(unknown, settings("http://x/v1"), "glm-5.3")
+    assert "rejected" in explain(status_error(openai.AuthenticationError, 401, "bad key"), settings("http://x/v1"))
 
 
 # --- routes ---------------------------------------------------------------------------------------------

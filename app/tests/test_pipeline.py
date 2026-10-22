@@ -36,6 +36,9 @@ class FakeLLM:
         self.client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=self._create)))
         self.calls = []
 
+    async def call(self, make, max_wait=None):    # the real LLM waits out rate limits here
+        return await make()
+
     async def embed(self, texts, kind="document"):
         return [bow(t) for t in texts]
 

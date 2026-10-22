@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import math
+import random
 import re
 import ssl
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -41,6 +42,22 @@ FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.S)
 # the providers whose qwen3-embedding-8b vectors matched Scaleway's (cosine 0.9999; DeepInfra, the fallback, 0.996).
 OPENROUTER_CHAT = {"extra_body": {"provider": {"require_parameters": True}}}
 OPENROUTER_EMBED = {"extra_body": {"provider": {"order": ["nebius", "siliconflow"]}}}
+
+
+DURATION = re.compile(r"^(?:(\d+)m(?!s))?(?:(\d+(?:\.\d+)?)s)?(?:(\d+)ms)?$")   # "59s985ms", "1m2s", "100ms"
+
+
+def reset_seconds(e: openai.APIStatusError) -> float | None:
+    """When the provider says the limit resets: `retry-after` or Scaleway's `x-ratelimit-reset-*`. None if unsaid."""
+    h, out = e.response.headers, []
+    try:
+        out.append(float(h["retry-after"]))
+    except (KeyError, ValueError):
+        pass
+    for name in ("x-ratelimit-reset-requests", "x-ratelimit-reset-tokens"):
+        if (m := DURATION.match(h.get(name, "").strip())) and any(m.groups()):
+            out.append(int(m[1] or 0) * 60 + float(m[2] or 0) + int(m[3] or 0) / 1000)
+    return max(out) if out else None
 
 
 def strip_fences(text: str) -> str:
@@ -74,12 +91,14 @@ def cut(vector: list[float], n: int) -> list[float]:
 
 class LLM:
     def __init__(self, settings: LLMSettings, timeout: float = 60, max_retries: int = 2,
-                 deadline: float | None = None, stall_retries: int = 2):
+                 deadline: float | None = None, stall_retries: int = 2, rate_limit_wait: float = 0):
         """`timeout` is httpx's: it limits the wait between bytes, so a gateway that keeps a request open without
         ever answering is never cut off. `deadline` limits a whole call; a stalled call is retried `stall_retries`
-        times, then raises Stalled."""
+        times, then raises Stalled. `rate_limit_wait`: how long a call may keep waiting out 429s (the provider's
+        per-minute or concurrency limit) before it gives up; 0 = fail at once, as the doctor wants."""
         self.s = settings
-        self.deadline, self.stall_retries = deadline, stall_retries
+        self.deadline, self.stall_retries, self.rate_limit_wait = deadline, stall_retries, rate_limit_wait
+        self.rate_limited = 0                  # calls that had to wait for a 429, for the logs and stats
         # Local servers accept any key, but the SDK refuses an empty one.
         key = settings.api_key or "not-needed"
         self.http = httpx.AsyncClient(verify=ssl_context(settings.ca_bundle), timeout=timeout)
@@ -94,13 +113,30 @@ class LLM:
         self.chat_extra = OPENROUTER_CHAT if openrouter else {}
         self.embed_extra = OPENROUTER_EMBED if openrouter and not settings.embed_base_url else {}
 
-    async def _call[R](self, make: Callable[[], Awaitable[R]]) -> R:
-        try:
-            return await self._within_deadline(make)
-        except openai.APIStatusError as e:
-            if e.status_code == 402:
-                raise OutOfCredits(e.message) from e
-            raise
+    async def call[R](self, make: Callable[[], Awaitable[R]], max_wait: float | None = None) -> R:
+        """One API call with the deadline, and waiting out rate limits. The SDK's own retries give up within seconds,
+        but Scaleway's quota is shared by the whole organisation (all keys, the whole room): back off and try again, up
+        to `max_wait` seconds in total (default: `rate_limit_wait`). The quota refills continuously (measured: a call
+        right after a refused burst succeeds), so short backoffs beat its "reset in 60 s" header; that header only
+        shortens a backoff, never stretches it."""
+        budget = self.rate_limit_wait if max_wait is None else max_wait
+        waited, backoff = 0.0, 2.0
+        while True:
+            try:
+                return await self._within_deadline(make)
+            except openai.RateLimitError as e:
+                # Jitter, so a room full of laptops that hit the limit together doesn't retry in lockstep.
+                pause = min(reset_seconds(e) or backoff, backoff) + random.uniform(0.5, 3)
+                if waited + pause > budget:
+                    raise
+                self.rate_limited += 1
+                log.warning("rate limited (%s); waiting %.0f s, then trying again", e.message[:80], pause)
+                await asyncio.sleep(pause)
+                waited, backoff = waited + pause, min(backoff * 2, 30)
+            except openai.APIStatusError as e:
+                if e.status_code == 402:
+                    raise OutOfCredits(e.message) from e
+                raise
 
     async def _within_deadline[R](self, make: Callable[[], Awaitable[R]]) -> R:
         if not self.deadline:
@@ -130,7 +166,7 @@ class LLM:
         """One chat completion; returns the message (`.content`, `.tool_calls`)."""
         if tools:
             kwargs["tools"] = tools
-        r = await self._call(lambda: self.client.chat.completions.create(model=model or self.s.chat_model,
+        r = await self.call(lambda: self.client.chat.completions.create(model=model or self.s.chat_model,
                                                                          messages=messages, **self.chat_extra,
                                                                          **kwargs))
         return r.choices[0].message
@@ -165,7 +201,7 @@ class LLM:
     async def extract_native[T: BaseModel](self, messages: list[dict], schema: type[T], *,
                                            model: str | None = None, **kwargs: Any) -> T:
         rf = {"type": "json_schema", "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()}}
-        r = await self._call(lambda: self.client.chat.completions.create(
+        r = await self.call(lambda: self.client.chat.completions.create(
             model=model or self.s.extract_model, messages=messages, response_format=rf, temperature=0,
             **self.chat_extra, **kwargs))
         return schema.model_validate_json(strip_fences(r.choices[0].message.content))
@@ -176,7 +212,7 @@ class LLM:
                        + json.dumps(schema.model_json_schema()))
         msgs = [*messages, {"role": "system", "content": instruction}]
         for attempt in range(attempts):
-            r = await self._call(lambda: self.client.chat.completions.create(
+            r = await self.call(lambda: self.client.chat.completions.create(
                 model=model or self.s.extract_model, messages=msgs, temperature=0, **self.chat_extra, **kwargs))
             text = r.choices[0].message.content or ""
             try:
@@ -197,14 +233,14 @@ class LLM:
         if self.s.embed_dim and self.send_dimensions:
             kwargs["dimensions"] = self.s.embed_dim
         try:
-            r = await self._call(lambda: self.embed_client.embeddings.create(model=self.s.embed_model, input=inputs,
+            r = await self.call(lambda: self.embed_client.embeddings.create(model=self.s.embed_model, input=inputs,
                                                                              **self.embed_extra, **kwargs))
         except openai.BadRequestError as e:
             if "dimensions" not in kwargs or "dimension" not in str(e).lower():
                 raise
             log.info("embedding server rejects `dimensions`; using the model's native size")
             self.send_dimensions = False
-            r = await self._call(lambda: self.embed_client.embeddings.create(model=self.s.embed_model, input=inputs,
+            r = await self.call(lambda: self.embed_client.embeddings.create(model=self.s.embed_model, input=inputs,
                                                                              **self.embed_extra))
         vectors = [d.embedding for d in sorted(r.data, key=lambda d: d.index)]
         if self.s.embed_dim and vectors and len(vectors[0]) > self.s.embed_dim:
