@@ -10,7 +10,7 @@ from conftest import GOOD_KEY
 from mini_cortex.doctor import Probe, explain, run_checks
 import pytest
 
-from mini_cortex.llm import LLM, OutOfCredits, Stalled, cut, reset_seconds
+from mini_cortex.llm import LLM, EmbeddingSize, OutOfCredits, Stalled, cut, reset_seconds
 from mini_cortex.llm_config import (OPENROUTER_URL, LLMSettings, SettingsUpdate, load_settings, raw_values,
                                     read_env_file, resolve, save_settings, write_env_file)
 from mini_cortex.pipeline import is_fatal
@@ -20,9 +20,9 @@ from mini_cortex.llm_routes import make_router
 REPO = Path(__file__).resolve().parents[2]
 
 
-def settings(url: str, key: str = GOOD_KEY, **kw) -> LLMSettings:
+def settings(url: str, key: str = GOOD_KEY, embed_model_: str = "qwen3-embedding-8b", **kw) -> LLMSettings:
     return LLMSettings(provider="custom", base_url=url, api_key=key, chat_model="glm-5.3",
-                       extract_model="deepseek-v4.1-flash", embed_model="qwen3-embedding-8b", embed_dim=1024, **kw)
+                       extract_model="deepseek-v4.1-flash", embed_model=embed_model_, embed_dim=1024, **kw)
 
 
 # --- config ---------------------------------------------------------------------------------------------
@@ -181,6 +181,17 @@ async def test_vectors_are_cut_when_the_server_ignores_dimensions(upstream):
     [v] = await llm.embed(["hello"])
     assert len(v) == 1024 and llm.cut_from == 4096
     assert cut([3.0, 4.0, 12.0], 2) == [0.6, 0.8]                        # first n values, renormalized
+    gateway = LLM(settings(url, embed_model_="generative-apis/qwen3-embedding-8b"))   # same model behind a gateway
+    assert len((await gateway.embed(["hello"]))[0]) == 1024
+
+
+async def test_a_fixed_size_model_is_never_cut(upstream):
+    up, url = upstream
+    up.ignore_dims = True
+    with pytest.raises(EmbeddingSize, match="Set the embedding size to 4096"):
+        await LLM(settings(url, embed_model_="bge-multilingual-gemma2")).embed(["hello"])
+    checks = {c.name: c for c in await run_checks(settings(url, embed_model_="bge-multilingual-gemma2"))}
+    assert checks["embeddings"].status == "fail" and "4096" in checks["embeddings"].fix
 
 
 async def test_embed_prefix_and_dimensions(upstream):
@@ -205,7 +216,7 @@ async def test_doctor_warns_and_fails_with_fixes(upstream):
     up.no_json_schema = up.ignore_dims = up.no_tools = True
     checks = {c.name: c for c in await run_checks(settings(url))}
     assert checks["structured output"].status == "warn"
-    assert checks["embeddings"].status == "warn" and "4096" in checks["embeddings"].fix
+    assert checks["embeddings"].status == "ok" and "cut here from 4096" in checks["embeddings"].detail
     assert checks["tool calling"].status == "fail" and "tool" in checks["tool calling"].fix
 
 

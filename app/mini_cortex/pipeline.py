@@ -21,7 +21,7 @@ import openai
 from .connector_items import source_ref
 from .dedup import dedup
 from .doctor import FATAL, explain
-from .llm import LLM
+from .llm import LLM, EmbeddingSize
 from .llm_config import LLMSettings
 from .memory_config import MemoryConfig, load_memory_config, save_memory_config
 from .packetize import Window, build_windows, chunk_long_items, extract, window_title
@@ -141,13 +141,13 @@ class Pipeline:
                                                or str(drafts))
                     try:
                         await self._write(w, drafts)
-                    except DimensionMismatch:
+                    except (DimensionMismatch, EmbeddingSize):
                         raise
                     except Exception as e:  # noqa: BLE001 — a stalled dedup call fails its window, not the run
                         log.warning("writing %s failed: %s", window_title(w), e)
                         await self._write(w, e)
                     self._set_progress(done=self.progress["done"] + 1)
-            except (DimensionMismatch, ModelUnreachable) as e:
+            except (DimensionMismatch, EmbeddingSize, ModelUnreachable) as e:
                 self._set_progress(state="failed", error=str(e))
                 return {"error": str(e)}
             except BaseException as e:

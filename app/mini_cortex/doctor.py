@@ -19,7 +19,7 @@ from typing import Literal
 import openai
 from pydantic import BaseModel
 
-from .llm import LLM, OutOfCredits
+from .llm import LLM, EmbeddingSize, OutOfCredits
 from .llm_config import LLMSettings, env_path, load_settings
 
 Status = Literal["ok", "warn", "fail", "skip"]
@@ -174,11 +174,12 @@ async def run_checks(s: LLMSettings, timeout: float = 30) -> list[Check]:
         return "ok", f"{s.chat_model}: {calls[0].function.name}({json.dumps(args)})", ""
 
     async def embeddings():
-        [vec] = await llm.embed(["mini-cortex doctor"], kind="raw")
+        try:
+            [vec] = await llm.embed(["mini-cortex doctor"], kind="raw")
+        except EmbeddingSize as e:
+            return "fail", f"{s.embed_model}: the server ignores `dimensions`", str(e)
         if llm.cut_from:
-            return ("warn", f"{s.embed_model}: {len(vec)} dims, cut here from {llm.cut_from}",
-                    "The server ignores `dimensions`, so the app cuts the vectors itself: right for Matryoshka models "
-                    f"such as qwen3-embedding-8b. For another model, set the embedding size to {llm.cut_from}.")
+            return ("ok", f"{s.embed_model}: {len(vec)} dims, cut here from {llm.cut_from} (a Matryoshka model)", "")
         if s.embed_dim and len(vec) != s.embed_dim:
             return ("warn", f"{s.embed_model}: got {len(vec)} dims, asked for {s.embed_dim}",
                     f"The server ignores `dimensions`. Set the embedding size to {len(vec)}.")

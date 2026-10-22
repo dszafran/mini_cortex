@@ -27,7 +27,7 @@ import openai
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
-from .llm_config import LLMSettings
+from .llm_config import PRESETS, LLMSettings
 
 log = logging.getLogger("llm")
 
@@ -79,6 +79,23 @@ class Stalled(TimeoutError):
 
 class OutOfCredits(RuntimeError):
     """HTTP 402: the key has no credit left (OpenRouter), so every other call would fail the same way."""
+
+
+class EmbeddingSize(RuntimeError):
+    """The server ignores `dimensions` and the model can't be cut safely: stop with the size to set, don't store
+    vectors of the wrong length or meaning."""
+
+
+def model_name(model: str) -> str:
+    """`qwen3-embedding-8b`, `qwen/qwen3-embedding-8b` and `generative-apis/qwen3-embedding-8b` are one model."""
+    return model.rsplit("/", 1)[-1].lower()
+
+
+def cuttable(model: str) -> bool:
+    """Only the presets' own embedding models were measured as Matryoshka (cut vectors = what a server that honours
+    `dimensions` returns). Cutting any other model (e.g. bge-multilingual-gemma2) would keep its size but lose its
+    meaning, so that one has to run at its native size instead."""
+    return any(p.embed_model and model_name(p.embed_model) == model_name(model) for p in PRESETS.values())
 
 
 def cut(vector: list[float], n: int) -> list[float]:
@@ -244,6 +261,9 @@ class LLM:
                                                                              **self.embed_extra))
         vectors = [d.embedding for d in sorted(r.data, key=lambda d: d.index)]
         if self.s.embed_dim and vectors and len(vectors[0]) > self.s.embed_dim:
+            if not cuttable(self.s.embed_model):
+                raise EmbeddingSize(f"{self.s.embed_model} returned {len(vectors[0])} dims and ignores `dimensions`. "
+                                    f"Set the embedding size to {len(vectors[0])} (Tune → Models), then Rebuild memory.")
             # The server ignored `dimensions`: cut here instead, so changing provider never breaks a memory.
             self.cut_from = len(vectors[0])
             vectors = [cut(v, self.s.embed_dim) for v in vectors]
