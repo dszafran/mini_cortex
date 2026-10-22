@@ -3,6 +3,7 @@
 Events (the shape web/src/api/types.ts `ChatEvent` expects):
     step       a tool call and a one-line result
     token      answer text as it arrives
+    answer     the whole answer once more, with the cited results renumbered 1, 2, 3 (replaces the streamed text)
     citations  the packets the answer cites, numbered like the [n] markers in the text
     done
 
@@ -77,6 +78,20 @@ def cited_numbers(text: str) -> set[int]:
     return {int(n) for group in CITATION.findall(text) for n in group.split(",")}
 
 
+def renumber(text: str, known: set[int]) -> tuple[str, dict[int, int]]:
+    """Every search result gets a number, so after a few searches the cited ones are [38] or [71]. Renumber the cited
+    ones 1, 2, 3 in the order they first appear; numbers the model wasn't given are dropped."""
+    order: dict[int, int] = {}
+    for group in CITATION.findall(text):
+        for n in map(int, group.split(",")):
+            if n in known:
+                order.setdefault(n, len(order) + 1)
+
+    def sub(m: re.Match) -> str:
+        return "".join(f"[{order[n]}]" for n in map(int, m[1].split(",")) if n in order)
+    return CITATION.sub(sub, text), order
+
+
 def where_of(p: dict) -> str:
     s = (p.get("sources") or [{}])[0]
     return " · ".join(x for x in (s.get("connector"), s.get("label")) if x)
@@ -134,11 +149,12 @@ class Chat:
                 yield {"type": "step", "step": step}
                 msgs.append({"role": "tool", "tool_call_id": c["id"] or f"call_{i}", "content": result})
 
-        cited = sorted(cited_numbers(text) & found.keys())
-        citations = [{"n": n, "kind": "packet", "title": found[n]["title"], "type": found[n]["type"],
+        text, order = renumber(text, set(found))
+        yield {"type": "answer", "text": text}           # the streamed text, with the citations numbered 1, 2, 3
+        citations = [{"n": new, "kind": "packet", "title": found[n]["title"], "type": found[n]["type"],
                       "where": where_of(found[n]), "when": found[n]["source_timestamp"][:10],
-                      "packet_id": found[n]["id"]} for n in cited]
-        self.packets.bump_access([found[n]["id"] for n in cited])
+                      "packet_id": found[n]["id"]} for n, new in order.items()]
+        self.packets.bump_access([found[n]["id"] for n in order])
         yield {"type": "citations", "citations": citations}
         self.state.add_message(thread_id, {"id": new_id("m"), "role": "assistant", "content": text, "steps": steps,
                                            "citations": citations})

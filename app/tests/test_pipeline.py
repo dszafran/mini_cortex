@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mini_cortex.chat import Chat, cited_numbers
+from mini_cortex.chat import Chat, cited_numbers, renumber
 from mini_cortex.llm_config import LLMSettings
 from mini_cortex.memory_config import load_memory_config
 from mini_cortex.packetize import build_windows, render
@@ -267,13 +267,20 @@ async def test_chat_searches_cites_and_streams(pipe):
                                ["Night mode is ", "off [1]."]])
     events = [e async for e in Chat(llm, pipe.packets, pipe.state, pipe.cfg).answer(None, "Is night mode on?")]
     kinds = [e["type"] for e in events]
-    assert kinds == ["thread", "step", "token", "token", "citations", "done"]
+    assert kinds == ["thread", "step", "token", "token", "answer", "citations", "done"]
     assert events[-2]["citations"][0]["title"].startswith("Night economy")
     tool_msg = llm.calls[1]["messages"][-1]
     assert tool_msg["role"] == "tool" and "untrusted_knowledge_data" in tool_msg["content"]
     thread = events[0]["thread_id"]
     assert [m["role"] for m in pipe.state.messages(thread)] == ["user", "assistant"]
     assert pipe.packets.all()[0]["access_count"] == 1
+
+
+def test_citations_are_renumbered_in_order_of_appearance():
+    text, order = renumber("Signing on 27 Oct [71]; deposit paid [69]. Check-up [38][40], again [71]; bad [99], "
+                           "grouped [40, 6].", known={6, 38, 40, 69, 71})
+    assert text == "Signing on 27 Oct [1]; deposit paid [2]. Check-up [3][4], again [1]; bad , grouped [4][5]."
+    assert order == {71: 1, 69: 2, 38: 3, 40: 4, 6: 5}
 
 
 def test_grouped_citations_count():

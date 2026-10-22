@@ -214,6 +214,7 @@ export interface Thread {
 export type ChatEvent =
   | { type: 'step'; step: ToolStep }
   | { type: 'token'; text: string }
+  | { type: 'answer'; text: string }
   | { type: 'citations'; citations: Citation[] }
   | { type: 'superseded'; items: { title: string; note: string }[] }
   | { type: 'thread'; thread_id: string }

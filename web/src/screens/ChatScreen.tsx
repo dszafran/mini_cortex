@@ -69,6 +69,7 @@ export function ChatScreen() {
       for await (const ev of api.ask(q, thread)) {
         if (ev.type === 'step') patch(thread, answerId, (m) => ({ ...m, steps: [...(m.steps ?? []), ev.step] }))
         else if (ev.type === 'token') patch(thread, answerId, (m) => ({ ...m, content: m.content + ev.text }))
+        else if (ev.type === 'answer') patch(thread, answerId, (m) => ({ ...m, content: ev.text }))
         else if (ev.type === 'citations') patch(thread, answerId, (m) => ({ ...m, citations: ev.citations }))
         else if (ev.type === 'superseded') patch(thread, answerId, (m) => ({ ...m, superseded: ev.items }))
         else if (ev.type === 'error')
