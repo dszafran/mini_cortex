@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import signal
+import socket
 import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -147,10 +148,30 @@ def stop_on_signals() -> None:
             signal.signal(getattr(signal, name), stop)
 
 
+def port_taken(host: str, port: int) -> bool:
+    with socket.socket() as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)    # as uvicorn does: a just-closed port is free
+        try:
+            s.bind((host, port))
+        except OSError:
+            return True
+    return False
+
+
+def check_ports(args: argparse.Namespace) -> None:
+    """Say which port is taken and what to type instead, before anything starts (uvicorn would print a traceback)."""
+    for port, flag in ((args.port, "--port"), (args.hub_port, "--hub-port")):
+        if port_taken(args.host, port):
+            raise SystemExit(f"Port {port} is already in use, probably by another mini-cortex (another terminal?). "
+                             f"Stop that one with Ctrl+C, or start this one on another port: "
+                             f"uv run mini-cortex {flag} {port + 1}")
+
+
 def serve(args: argparse.Namespace) -> None:
     data = data_dir()
     if url := snapshot.running(data):
         raise SystemExit(f"mini-cortex already runs on {data} ({url}). Stop it, or use --data for a second one.")
+    check_ports(args)
     hub = Hub(args.token, args.backfill_days or None, str(data / "items.jsonl"))
     if not args.no_pipeline:
         hub.pipeline = Pipeline(load_settings(), publish=hub.publish, data=data)
@@ -182,6 +203,8 @@ def serve(args: argparse.Namespace) -> None:
                 else:
                     log.info("no connectors enabled: add --connector NAME (available: %s)",
                              ", ".join(launcher.available()) or "none")
+            if not server.started:          # lost a race for the port after check_ports
+                raise OSError(f"port {args.port} is already in use")
             await serving_task
 
     stop_on_signals()
