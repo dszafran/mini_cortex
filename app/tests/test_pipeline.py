@@ -228,8 +228,11 @@ async def test_invalid_verdict_adds_instead_of_merging(pipe, monkeypatch):
     await pipe.process()
     real = pipe.llm.extract
 
+    caps = []
+
     async def broken(messages, schema, **kw):
         if schema.__name__ == "Verdict":
+            caps.append(kw["max_tokens"])
             return schema.model_validate({"action": "MERGE", "content": "x" * 5000})   # raises ValidationError
         return await real(messages, schema, **kw)
 
@@ -238,6 +241,7 @@ async def test_invalid_verdict_adds_instead_of_merging(pipe, monkeypatch):
     await pipe.process()
     last = next(e for e in pipe.state.memory_log() if e["stage"] == "dedup")
     assert last["action"] == "ADD" and "invalid" in last["reason"]
+    assert caps == [700, 2000]                              # one retry with more room before giving up
     assert len(pipe.packets.all()) == 2
     assert ValidationError
 

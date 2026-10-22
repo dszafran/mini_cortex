@@ -19,6 +19,8 @@ from .memory_config import MemoryConfig
 from .store import PacketStore, new_id, now
 
 # EXPLORE: the verdict prompt. Tune θ on the Tune screen and watch MERGE/SKIP change.
+VERDICT_MAX_TOKENS = (700, 2000)   # first try, then one retry with room for a reasoning model's thinking
+
 VERDICT_PROMPT = """You keep a personal knowledge memory free of duplicates. A NEW packet was just extracted. Compare it
 with the EXISTING packets (the most similar ones already in memory) and decide:
 
@@ -82,15 +84,22 @@ async def dedup(llm: LLM, packets: PacketStore, draft: dict, cfg: MemoryConfig) 
                            f"content: {p['content']}" for p, c in candidates)
     prompt = VERDICT_PROMPT.format(new_type=draft["type"], new_when=draft["source_timestamp"][:10],
                                    new_title=draft["title"], new_content=draft["content"], existing=existing)
-    try:
-        # max_tokens stops a looping model on servers without guided decoding (the output is then invalid JSON).
-        v = await llm.extract([{"role": "user", "content": prompt}], Verdict, max_tokens=700)
-    except ValidationError as e:
+    v, error = None, None
+    # max_tokens stops a looping model on servers without guided decoding (the output is then invalid JSON). A reasoning
+    # model spends part of it on thinking (measured: 255 of 410 tokens for one candidate), so a broken verdict gets one
+    # more try with more room before it counts as invalid.
+    for max_tokens in VERDICT_MAX_TOKENS:
+        try:
+            v = await llm.extract([{"role": "user", "content": prompt}], Verdict, max_tokens=max_tokens)
+            break
+        except ValidationError as e:
+            error = e
+    if v is None:
         # A broken verdict (cut off, over the limits) must not touch existing packets: keep the new one as its own.
         packet = add(packets, draft, vector)
         return {"stage": "dedup", "action": "ADD", "title": packet["title"], "packet_ids": [packet["id"]],
-                "reason": f"The model's verdict was invalid ({e.errors()[0]['type']}), so the packet was kept as new.",
-                "source": source, "detail": {"neighbours": shown}}
+                "reason": f"The model's verdict was invalid twice ({error.errors()[0]['type']}), so the packet was "
+                          "kept as new.", "source": source, "detail": {"neighbours": shown}}
     by_id = {p["id"]: p for p, _ in candidates}
     target = by_id.get(v.target_id or "") or candidates[0][0]
 
