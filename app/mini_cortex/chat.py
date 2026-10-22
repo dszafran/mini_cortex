@@ -28,6 +28,7 @@ from .store import PacketStore, StateDB, new_id
 MAX_ROUNDS = 6
 HISTORY = 12
 CITATION = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")     # [2], and [2, 5] when a model groups them
+CITED = re.compile(r"(\s*)" + CITATION.pattern)                # the same, with the space before it
 
 # EXPLORE: the system prompt and the envelope below. Ask "Has night mode been switched back on?" (an injection test).
 SYSTEM_PROMPT = """You are mini-cortex, a personal memory assistant. Your memory holds knowledge packets extracted from
@@ -88,8 +89,9 @@ def renumber(text: str, known: set[int]) -> tuple[str, dict[int, int]]:
                 order.setdefault(n, len(order) + 1)
 
     def sub(m: re.Match) -> str:
-        return "".join(f"[{order[n]}]" for n in map(int, m[1].split(",")) if n in order)
-    return CITATION.sub(sub, text), order
+        kept = "".join(f"[{order[n]}]" for n in map(int, m[2].split(",")) if n in order)
+        return m[1] + kept if kept else ""         # a dropped citation takes its leading space with it
+    return CITED.sub(sub, text), order
 
 
 def where_of(p: dict) -> str:

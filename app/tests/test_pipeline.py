@@ -279,7 +279,7 @@ async def test_chat_searches_cites_and_streams(pipe):
 def test_citations_are_renumbered_in_order_of_appearance():
     text, order = renumber("Signing on 27 Oct [71]; deposit paid [69]. Check-up [38][40], again [71]; bad [99], "
                            "grouped [40, 6].", known={6, 38, 40, 69, 71})
-    assert text == "Signing on 27 Oct [1]; deposit paid [2]. Check-up [3][4], again [1]; bad , grouped [4][5]."
+    assert text == "Signing on 27 Oct [1]; deposit paid [2]. Check-up [3][4], again [1]; bad, grouped [4][5]."
     assert order == {71: 1, 69: 2, 38: 3, 40: 4, 6: 5}
 
 
