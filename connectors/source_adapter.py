@@ -175,6 +175,10 @@ async def dry_fetch(adapter: SourceAdapter, stream: str, since: datetime, until:
         cursor = page.next_cursor
 
 
+# Exit code for "a setting is missing or wrong" (sysexits EX_CONFIG). The app doesn't restart a connector that exits
+# with it: the same setting would fail again. An adapter signals it with `raise SystemExit("what to set")`.
+CONFIG_ERROR = 78
+
 ENV_FILE = Path(__file__).with_name(".env")      # connectors/.env, whichever directory the adapter runs from
 
 
@@ -214,8 +218,8 @@ def main(adapter_cls: Callable[[], SourceAdapter], argv: list[str] | None = None
     args = ap.parse_args(argv)
     setup_logging(args.verbose)
 
-    adapter = adapter_cls()
     try:
+        adapter = adapter_cls()
         if args.cmd == "fetch":
             until = parse_iso(args.until) if args.until else datetime.now(UTC)
             since = parse_iso(args.since) if args.since else until - timedelta(days=args.days)
@@ -231,3 +235,8 @@ def main(adapter_cls: Callable[[], SourceAdapter], argv: list[str] | None = None
             asyncio.run(run_adapter(adapter, hub_url, token, state))
     except KeyboardInterrupt:
         pass
+    except SystemExit as e:
+        if isinstance(e.code, str):                # a message, not argparse's exit code: a setting to fix
+            print(e.code, file=sys.stderr, flush=True)
+            raise SystemExit(CONFIG_ERROR) from None
+        raise

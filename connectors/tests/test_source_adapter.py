@@ -32,3 +32,18 @@ def test_main_reads_the_env_file_next_to_the_adapters(tmp_path, monkeypatch, cap
     monkeypatch.delenv("NOTE_TEXT")                       # unset now, and unset again after the test
     source_adapter.main(Notes, ["fetch", "--days", "1"])
     assert "from connectors/.env" in capsys.readouterr().out
+
+
+class NeedsToken(Notes):
+    def __init__(self):
+        raise SystemExit("NOTES_TOKEN is not set")
+
+
+def test_a_missing_setting_exits_with_the_config_code(capsys):
+    try:
+        source_adapter.main(NeedsToken, ["fetch"])
+    except SystemExit as e:
+        assert e.code == source_adapter.CONFIG_ERROR
+    else:
+        raise AssertionError("no exit")
+    assert "NOTES_TOKEN is not set" in capsys.readouterr().err

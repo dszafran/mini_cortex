@@ -25,6 +25,7 @@ from .llm_config import ENV_KEYS, REPO_ROOT, env_path, read_env_file
 
 log = logging.getLogger("launcher")
 CONNECTORS_DIR = REPO_ROOT / "connectors"
+CONFIG_ERROR = 78            # connectors/source_adapter.py: a setting is missing or wrong, restarting won't help
 MAX_RESTARTS = 3             # in a row; a run that lasted STABLE_S seconds resets the count
 STABLE_S = 60.0
 Command = Callable[[str], list[str]]
@@ -95,6 +96,10 @@ class Child:
                 self.out(f"[{self.name}] {line.rstrip()}")
             code = self.proc.wait()
             if self.stopping.is_set():
+                return
+            if code == CONFIG_ERROR:
+                self.out(f"[{self.name}] stopped: fix the setting above (in .env or connectors/.env), "
+                         "then restart mini-cortex")
                 return
             failures = 0 if time.monotonic() - started > STABLE_S else failures + 1
             if failures > MAX_RESTARTS:

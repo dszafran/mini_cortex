@@ -13,6 +13,9 @@ import os, sys, time
 print("hub", os.environ["HUB_URL"], "token", os.environ["CONNECTOR_TOKEN"], flush=True)
 if os.environ.get("FAKE_MODE") == "crash":
     sys.exit(3)
+if os.environ.get("FAKE_MODE") == "config":
+    print("FAKE_TOKEN is not set", flush=True)
+    sys.exit(78)
 time.sleep(60)
 '''
 
@@ -65,6 +68,18 @@ def test_restarts_a_crashing_connector_then_gives_up(tmp_path, monkeypatch):
     assert wait_for(lambda: not child.thread.is_alive())
     assert child.starts == 3                                             # first run + 2 restarts
     assert "restarting in" in lines[1] and "gave up after 2 restarts" in lines[-1]
+    run.stop()
+
+
+def test_a_config_error_is_not_restarted(tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_MODE", "config")
+    monkeypatch.setattr(launcher, "backoff", lambda failures: 0.01)
+    lines: list[str] = []
+    run = fake_launcher(tmp_path, ["fake"], lines)
+    run.start()
+    child = run.children[0]
+    assert wait_for(lambda: not child.thread.is_alive())
+    assert child.starts == 1 and "FAKE_TOKEN is not set" in lines[-2] and "fix the setting" in lines[-1]
     run.stop()
 
 
