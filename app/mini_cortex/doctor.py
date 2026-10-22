@@ -56,10 +56,16 @@ def explain(e: Exception, s: LLMSettings, model: str = "") -> str:
         return ("No credit left on this key. Ask your instructor for another one, or switch provider in "
                 "Tune → Models.")
     if isinstance(e, openai.AuthenticationError):
+        if model and "model" in str(e).lower():     # gateways answer an unknown model with 401, not 404
+            return f"Model {model!r} is not available for this key. Pick one from the model list."
         where = s.preset.key_help if s.provider == "scaleway" else "Check that it is complete and belongs to this provider."
         return f"The key was rejected. {where}"
     if isinstance(e, openai.PermissionDeniedError):
-        return "The key is valid but not allowed here. Check that its IAM policy grants Generative APIs access in this project."
+        # Scaleway answers an expired or revoked key with 403 too, the same as a missing policy.
+        if s.provider == "scaleway":
+            return ("Scaleway refused the key: it may have expired or been revoked, or its policy lacks Generative APIs "
+                    "access in this project. Create a new key in Console → IAM → API keys.")
+        return "The key was refused here: it may have expired or been revoked, or it lacks access to this endpoint."
     if isinstance(e, openai.NotFoundError):
         if model:
             return f"Model {model!r} is not served here. Pick one from the model list."

@@ -169,7 +169,7 @@ function LiveStrip({
           )}
         </div>
         {p?.state === 'failed' && <span className="err">{p.error}</span>}
-        {!!s.errors && !running && <span className="err">{s.errors} items failed last time; Process retries them</span>}
+        {!!s.errors && !running && <span className="err">{s.errors} {s.errors === 1 ? 'item' : 'items'} failed last time; Process retries them</span>}
       </div>
       <div>
         <small>Packetize</small>
