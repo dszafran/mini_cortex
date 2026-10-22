@@ -24,6 +24,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from .chat import Chat
+from .doctor import explain, short
 from .pipeline import Pipeline
 from .store import DimensionMismatch
 
@@ -116,7 +117,8 @@ def make_router(pipeline: Pipeline) -> APIRouter:
                 async for ev in bot.answer(req.thread_id, req.message):
                     yield f"event: {ev['type']}\ndata: {json.dumps(ev, ensure_ascii=False)}\n\n"
             except Exception as e:  # noqa: BLE001 — show the failure in the chat instead of a dropped stream
-                err = {"type": "error", "message": str(e)[:300]}
+                fix = explain(e, pipeline.settings, pipeline.settings.chat_model)
+                err = {"type": "error", "message": f"{short(e)[:300]}" + (f"\n\n{fix}" if fix else "")}
                 yield f"event: error\ndata: {json.dumps(err)}\n\n"
 
         return StreamingResponse(events(), media_type="text/event-stream",

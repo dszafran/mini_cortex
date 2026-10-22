@@ -62,6 +62,9 @@ def explain(e: Exception, s: LLMSettings, model: str = "") -> str:
         return f"The key was rejected. {where}"
     if isinstance(e, openai.PermissionDeniedError):
         # Scaleway answers an expired or revoked key with 403 too, the same as a missing policy.
+        if s.provider == "scaleway" and not s.project_id:
+            return ("Scaleway refused the key for the default project. Fill in the Project ID the key belongs to "
+                    "(Console → Project → Copy ID): a key usually covers one project only.")
         if s.provider == "scaleway":
             return ("Scaleway refused the key: it may have expired or been revoked, or its policy lacks Generative APIs "
                     "access in this project. Create a new key in Console → IAM → API keys.")

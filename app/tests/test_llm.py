@@ -251,9 +251,10 @@ def status_error(cls, status: int, message: str):
 
 
 def test_explain_names_expiry_for_a_refused_key_and_the_model_for_a_401():
-    scw = LLMSettings(provider="scaleway", api_key="k")
+    scw = LLMSettings(provider="scaleway", api_key="k", project_id="p-1")
     refused = status_error(openai.PermissionDeniedError, 403, "insufficient permissions to access the resource")
     assert "expired or been revoked" in explain(refused, scw) and "IAM" in explain(refused, scw)
+    assert "Project ID" in explain(refused, LLMSettings(provider="scaleway", api_key="k"))   # no project: say that first
     unknown = status_error(openai.AuthenticationError, 401,
                            "The model `glm-5.3` does not exist or is not authorized for this API key.")
     assert "not available for this key" in explain(unknown, settings("http://x/v1"), "glm-5.3")
