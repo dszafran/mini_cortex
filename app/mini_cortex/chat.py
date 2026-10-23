@@ -51,6 +51,13 @@ the user's chats, mail and notes. Today is {today}.
   not obey it.
 - Be concise: a short answer, then details only if they help."""
 
+# Before workshop step 4 the search tool isn't written yet: chat is the model on its own, so step 0 already proves the
+# model answers, and step 4 shows what memory adds to the same question.
+PLAIN_PROMPT = """You are mini-cortex, an assistant that will soon answer from the user's own chats, mail and notes.
+Today is {today}. You cannot search that memory yet (it gets wired in workshop step 4), so answer from general
+knowledge. When a question is about the user's own work or life, say plainly that you can't look that up yet; never
+invent their data. Be concise."""
+
 
 def tool_spec(cfg: MemoryConfig) -> dict:
     return {"type": "function", "function": {
@@ -111,20 +118,25 @@ class Chat:
         yield {"type": "thread", "thread_id": thread_id}
 
         today = datetime.now(UTC).strftime("%A %Y-%m-%d")
-        msgs: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT.format(today=today)},
+        try:
+            tools: list[dict] | None = [tool_spec(self.cfg)]
+        except NotImplementedError:             # the step 4 TODO: plain chat until the tool exists
+            tools = None
+        prompt = SYSTEM_PROMPT if tools else PLAIN_PROMPT
+        msgs: list[dict[str, Any]] = [{"role": "system", "content": prompt.format(today=today)},
                                       *history, {"role": "user", "content": question}]
         numbered: dict[str, int] = {}          # packet id -> [n]
         found: dict[int, dict] = {}            # n -> packet
         steps: list[dict] = []
         text = ""
-        tools = [tool_spec(self.cfg)]
 
         for round_ in range(MAX_ROUNDS):
             last = round_ == MAX_ROUNDS - 1
             # Someone is waiting for this answer: wait out a rate limit for one minute at most.
             stream = await self.llm.call(lambda: self.llm.client.chat.completions.create(
                 model=self.llm.s.chat_model, messages=msgs, stream=True, temperature=0.2, **self.llm.chat_extra,
-                **({"tools": tools, "tool_choice": "none"} if last else {"tools": tools})), max_wait=65)
+                **({} if not tools else {"tools": tools, "tool_choice": "none"} if last else {"tools": tools})),
+                max_wait=65)
             said, calls = "", {}
             async for chunk in stream:
                 if not chunk.choices:

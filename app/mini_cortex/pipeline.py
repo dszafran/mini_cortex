@@ -36,7 +36,10 @@ class ModelUnreachable(RuntimeError):
 
 
 def is_fatal(result: object) -> bool:
-    """Errors that hit every call alike (not a single stalled or bad reply)."""
+    """Errors that hit every call alike (not a single stalled or bad reply). A workshop TODO that isn't written yet
+    (NotImplementedError) counts too: the run stops and shows which function to write."""
+    if isinstance(result, NotImplementedError):
+        return True
     return isinstance(result, FATAL) and not isinstance(result, openai.APITimeoutError)
 
 

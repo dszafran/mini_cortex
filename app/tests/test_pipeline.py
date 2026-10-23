@@ -276,6 +276,20 @@ async def test_chat_searches_cites_and_streams(pipe):
     assert pipe.packets.all()[0]["access_count"] == 1
 
 
+async def test_chat_is_plain_until_the_search_tool_exists(pipe, monkeypatch):
+    import mini_cortex.chat as chat
+
+    def todo(cfg):
+        raise NotImplementedError("step 4 TODO: tool_spec() in app/mini_cortex/chat.py")
+
+    monkeypatch.setattr(chat, "tool_spec", todo)
+    llm = FakeLLM(chat_script=[["Hi! I can't look up your own notes yet."]])
+    events = [e async for e in Chat(llm, pipe.packets, pipe.state, pipe.cfg).answer(None, "hi")]
+    assert [e["type"] for e in events] == ["thread", "token", "answer", "citations", "done"]
+    assert "tools" not in llm.calls[0] and "cannot search" in llm.calls[0]["messages"][0]["content"]
+    assert events[-2]["citations"] == []
+
+
 def test_citations_are_renumbered_in_order_of_appearance():
     text, order = renumber("Signing on 27 Oct [71]; deposit paid [69]. Check-up [38][40], again [71]; bad [99], "
                            "grouped [40, 6].", known={6, 38, 40, 69, 71})
