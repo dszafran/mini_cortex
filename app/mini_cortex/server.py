@@ -206,9 +206,6 @@ def serve(args: argparse.Namespace) -> None:
                 log.info(launcher.why(names, args.connector, env_connectors))
                 if names:
                     children.start()
-                else:
-                    log.info("no connectors enabled: add --connector NAME (available: %s)",
-                             ", ".join(launcher.available()) or "none")
             if not server.started:          # lost a race for the port after check_ports
                 raise OSError(f"port {args.port} is already in use")
 

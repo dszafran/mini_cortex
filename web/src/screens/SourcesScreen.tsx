@@ -87,10 +87,11 @@ export function SourcesScreen({
           )}
           {connectors.length === 0 && (
             <div className="conn-empty">
-              <h3>No connectors yet</h3>
+              <h3>No sources wired yet</h3>
               <p>
-                Restart the app with a connector and it appears here within a second:
-                <code>uv run mini-cortex --connector replay</code>
+                Wire your Slack (workshop step 1): set <code>MINI_CORTEX_CONNECTORS=slack</code> and your tokens in
+                <code>.env</code>, then restart the app. No Slack? The offline story:
+                <code>MINI_CORTEX_CONNECTORS=replay</code>
               </p>
             </div>
           )}

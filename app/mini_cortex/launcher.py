@@ -41,8 +41,9 @@ def available(root: Path = CONNECTORS_DIR) -> list[str]:
 
 
 def default_connectors(root: Path = CONNECTORS_DIR) -> list[str]:
-    """The offline replay story when it is there: the app shows something without any account or key."""
-    return ["replay"] if adapter_path("replay", root).exists() else []
+    """None: data appears once you wire a source yourself (workshop step 1: your Slack). The offline story is a
+    choice too, not the default: MINI_CORTEX_CONNECTORS=replay."""
+    return []
 
 
 def from_settings() -> str | None:
@@ -52,15 +53,11 @@ def from_settings() -> str | None:
 
 def why(names: list[str], cli: list[str] | None, env: str | None, root: Path = CONNECTORS_DIR) -> str:
     """One startup line: which connectors run, why, and how to change it (--connector replaces the default)."""
-    if cli:
-        source = "from --connector"
-    elif env is not None:
-        source = "from MINI_CORTEX_CONNECTORS"
-    else:
-        source = "the default; for more: --connector NAME or MINI_CORTEX_CONNECTORS=replay,slack in .env"
-    left_out = [n for n in default_connectors(root) if n not in names]
-    off = f" · {', '.join(left_out)} is off (list it too to keep it)" if left_out else ""
-    return f"connectors: {', '.join(names) or 'none'} ({source}){off}"
+    if not names:
+        return ("connectors: none yet, so no data comes in. Wire one in .env: MINI_CORTEX_CONNECTORS=slack (workshop "
+                "step 1, with SLACK_TOKEN), or the offline story: MINI_CORTEX_CONNECTORS=replay")
+    source = "from --connector" if cli else "from MINI_CORTEX_CONNECTORS" if env is not None else "default"
+    return f"connectors: {', '.join(names)} ({source})"
 
 
 def enabled(cli: list[str] | None, env: str | None, root: Path = CONNECTORS_DIR) -> list[str]:

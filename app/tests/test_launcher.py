@@ -38,7 +38,7 @@ def fake_launcher(tmp_path, names, lines):
 def test_enabled_precedence(tmp_path):
     assert launcher.enabled(None, None, tmp_path) == []
     (tmp_path / "replay_adapter.py").write_text("")
-    assert launcher.enabled(None, None, tmp_path) == ["replay"]          # default when the replay story exists
+    assert launcher.enabled(None, None, tmp_path) == []                  # nothing by default: you wire a source
     assert launcher.enabled(None, "", tmp_path) == []                    # env set but empty = none
     assert launcher.enabled(None, "slack, replay,slack", tmp_path) == ["slack", "replay"]
     assert launcher.enabled(["slack", "x,y"], "replay", tmp_path) == ["slack", "x", "y"]
@@ -47,10 +47,10 @@ def test_enabled_precedence(tmp_path):
 
 def test_startup_line_says_why_and_what_is_off(tmp_path, monkeypatch):
     (tmp_path / "replay_adapter.py").write_text("")
-    assert "default" in launcher.why(["replay"], None, None, tmp_path)
-    line = launcher.why(["slack"], ["slack"], None, tmp_path)
-    assert "from --connector" in line and "replay is off" in line
-    assert "replay is off" not in launcher.why(["replay", "slack"], None, "replay,slack", tmp_path)
+    none = launcher.why([], None, None, tmp_path)
+    assert "no data comes in" in none and "MINI_CORTEX_CONNECTORS=slack" in none and "=replay" in none
+    assert launcher.why(["slack"], ["slack"], None, tmp_path) == "connectors: slack (from --connector)"
+    assert launcher.why(["replay", "slack"], None, "replay,slack", tmp_path).endswith("(from MINI_CORTEX_CONNECTORS)")
     env = tmp_path / ".env"
     env.write_text("MINI_CORTEX_CONNECTORS=replay,slack\n")
     monkeypatch.setenv("MINI_CORTEX_ENV", str(env))
