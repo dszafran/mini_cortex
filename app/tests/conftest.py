@@ -2,9 +2,11 @@
 
 import asyncio
 import json
+import re
 import socket
 import threading
 import time
+from pathlib import Path
 
 import pytest
 import uvicorn
@@ -117,3 +119,33 @@ def env_file(tmp_path, monkeypatch):
     path = tmp_path / ".env"
     monkeypatch.setenv("MINI_CORTEX_ENV", str(path))
     return path
+
+
+# --- workshop step branches -----------------------------------------------------------------------------------------
+# A step branch also carries the later steps' exercises as TODOs. Their tests would fail there for a reason that isn't
+# this step's, so they're skipped with the step they belong to; this step's own tests still fail until it's solved.
+# The current step comes from STEP.md (none on main: nothing is skipped).
+LATER_STEPS = {           # test -> the latest workshop step whose exercise it needs
+    "test_doctor_all_green": 0, "test_extract_native_and_fallback": 0,
+    "test_a_failing_window_does_not_stop_the_run_and_is_retried": 2, "test_live_buffer_flushes_after_n_messages": 2,
+    "test_packet_sources_route_returns_original_messages": 2, "test_type_is_a_preference_not_a_filter": 2,
+    "test_unreachable_model_stops_the_run_and_keeps_items_pending": 2,
+    "test_invalid_verdict_adds_instead_of_merging": 3, "test_process_adds_skips_and_merges": 3,
+    "test_chat_searches_cites_and_streams": 4, "test_rrf_prefers_items_in_both_lists": 4,
+}
+
+
+def current_step() -> int | None:
+    step_md = Path(__file__).resolve().parents[2] / "STEP.md"
+    m = re.match(r"# Step (\d+)", step_md.read_text(encoding="utf-8")) if step_md.is_file() else None
+    return int(m[1]) if m else None
+
+
+def pytest_collection_modifyitems(config, items):
+    now = current_step()
+    if now is None:
+        return
+    for item in items:
+        step = LATER_STEPS.get(item.name.split("[")[0])
+        if step is not None and step > now:
+            item.add_marker(pytest.mark.skip(reason=f"comes in workshop step {step}"))
