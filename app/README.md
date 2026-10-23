@@ -15,7 +15,7 @@ From the repo root or from `app/` (the root `pyproject.toml` makes `app/` a uv w
 
 ```bash
 uv run mini-cortex                                  # UI and API on http://127.0.0.1:8787, hub on :8765
-uv run mini-cortex --connector slack                # slack instead of the replay story (repeat --connector for more)
+uv run mini-cortex --connector slack                # your Slack (no source starts by default; repeat --connector for more)
 MINI_CORTEX_CONNECTORS=replay,slack uv run mini-cortex
 uv run mini-cortex --backfill-days 30 --data /tmp/other-memory --port 8797 --hub-port 8798
 uv run mini-cortex snapshot save day1               # app stopped; packs .data into <repo>/snapshots/day1.tar.gz
@@ -25,9 +25,9 @@ uv run mini-cortex snapshot list
 
 - **Connectors** run as child processes (`uv run --project ../connectors python ../connectors/<name>_adapter.py serve`
   with `HUB_URL` and `CONNECTOR_TOKEN` set; their own settings such as `SLACK_BOT_TOKEN` come from your environment).
-  Their logs are prefixed `[name]`; a crashed one is restarted up to 3 times; Ctrl+C stops them all. Default: `replay`
-  (the offline story) when `connectors/replay_adapter.py` exists, otherwise none. `--connector none` or
-  `MINI_CORTEX_CONNECTORS=` starts none. A connector started by hand still dials into `ws://127.0.0.1:8765/connectors`.
+  Their logs are prefixed `[name]`; a crashed one is restarted up to 3 times, one with a missing setting (exit 78) not
+  at all; Ctrl+C stops them all. Default: none, so data appears once you wire a source; `MINI_CORTEX_CONNECTORS`
+  (environment or `.env`) or `--connector` picks them, e.g. `slack`, or `replay` for the offline story. A connector started by hand still dials into `ws://127.0.0.1:8765/connectors`.
 - **Backfill**: on a connector's first hello the hub fetches the last `--backfill-days` (default 60; 0 = none). Fetched
   items wait as *pending* (Memory → Process); pushed items are packetized after the buffer window.
 - **Snapshots** record the embedding model and size; loading under different settings warns, since the vectors would

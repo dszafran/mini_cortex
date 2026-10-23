@@ -21,7 +21,7 @@ in unless you are asked to.
 ## Commands (repo root)
 
 ```bash
-uv run mini-cortex                       # app + the offline replay story; Ctrl+C stops everything
+uv run mini-cortex --connector replay    # app + the offline replay story; Ctrl+C stops everything (no source by default)
 uv run mini-cortex --connector replay --connector notes    # the story plus connectors/notes_adapter.py
 uv run doctor                                       # checks the model settings in .env
 uv run --directory app pytest -q                    # app tests: a stub model server, no key needed

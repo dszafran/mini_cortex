@@ -23,7 +23,7 @@ from the repo root and from `app/`: the root `pyproject.toml` is a uv workspace 
 
 | Command | What |
 |---|---|
-| `uv run mini-cortex --connector slack` | start `connectors/slack_adapter.py` instead of the replay story (repeatable: `--connector replay --connector slack`) |
+| `uv run mini-cortex --connector slack` | start `connectors/slack_adapter.py` (repeatable: `--connector replay --connector slack`; no source starts by default, or set `MINI_CORTEX_CONNECTORS` in `.env`) |
 | `uv run mini-cortex --port 8797 --hub-port 8798` | other ports, e.g. when 8787 is taken |
 | `uv run mini-cortex snapshot load NAME` | start from a prebuilt memory in `snapshots/` (stop the app first) |
 | `uv run mini-cortex --help` | all options |
