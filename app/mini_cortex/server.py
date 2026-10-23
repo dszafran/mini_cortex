@@ -114,10 +114,14 @@ def make_app(hub: Hub, hub_url: str, static: Path | None) -> FastAPI:
                 yield "retry: 2000\n\n"
                 while True:
                     try:
-                        event, data = await asyncio.wait_for(q.get(), 15)
-                        yield f"event: {event}\ndata: {json.dumps(data)}\n\n"
+                        msg = await asyncio.wait_for(q.get(), 15)
                     except TimeoutError:
                         yield ": keep-alive\n\n"
+                        continue
+                    if msg is None:            # shutting down: end the stream so Ctrl+C doesn't wait for the browser
+                        return
+                    event, data = msg
+                    yield f"event: {event}\ndata: {json.dumps(data)}\n\n"
             finally:
                 hub.subscribers.discard(q)
 
@@ -207,7 +211,18 @@ def serve(args: argparse.Namespace) -> None:
                              ", ".join(launcher.available()) or "none")
             if not server.started:          # lost a race for the port after check_ports
                 raise OSError(f"port {args.port} is already in use")
+
+            async def close_streams_on_exit() -> None:
+                # On Ctrl+C uvicorn waits for open connections; the browser's event stream never closes by itself,
+                # so end it, or shutdown times out and prints a traceback for every open tab.
+                while not server.should_exit:
+                    await asyncio.sleep(0.1)
+                for q in list(hub.subscribers):
+                    q.put_nowait(None)
+
+            closer = asyncio.create_task(close_streams_on_exit())
             await serving_task
+            closer.cancel()
 
     stop_on_signals()
     try:
