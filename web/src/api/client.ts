@@ -1,7 +1,6 @@
 // Single entry point for data.
 // Live mode: the app (`uv run mini-cortex`, app/mini_cortex/server.py) is reachable at /api, so connectors, protocol frames, intake,
 // packets, memory decisions and chat are real (app/mini_cortex). Mock mode: everything comes from mock.ts.
-// Lenses are still mock in both modes.
 import { fmtDayTime } from '../fmt'
 import * as mock from './mock'
 import type {
@@ -10,7 +9,6 @@ import type {
   ConnectorInfo,
   DataMode,
   DoctorCheck,
-  Lens,
   LlmDraft,
   LlmModel,
   LlmSettings,
@@ -171,9 +169,6 @@ export const api = {
   async items(limit = 200): Promise<RawItem[]> {
     if ((await detectMode()) === 'live') return get(`/api/items?limit=${limit}`)
     return []
-  },
-  async lenses(): Promise<Lens[]> {
-    return clone(mock.lenses)
   },
   async settings(): Promise<Settings> {
     if ((await detectMode()) === 'live') return get('/api/settings')

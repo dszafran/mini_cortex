@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Lens, LlmSettings, Settings } from '../api/types'
+import type { LlmSettings, Settings } from '../api/types'
 import { TypeChip } from '../components/atoms'
 import { ModelsSection } from './ModelsSection'
 
@@ -8,13 +8,11 @@ const THETA_MAX = 0.95
 
 export function TuneScreen({
   settings,
-  lenses,
   onApply,
   llm,
   onLlmSaved,
 }: {
   settings: Settings
-  lenses: Lens[]
   onApply: (s: Settings) => Promise<void>
   llm: LlmSettings | null
   onLlmSaved: (s: LlmSettings) => void
@@ -27,26 +25,6 @@ export function TuneScreen({
   return (
     <div className="tune">
       {llm && <ModelsSection llm={llm} onSaved={onLlmSaved} />}
-
-      <section className="wide">
-        <h3>Lens</h3>
-        <p>Who is this memory for? The same data produces different packets under each lens.</p>
-        <div className="lenses" role="radiogroup" aria-label="Lens">
-          {lenses.map((l) => (
-            <button
-              type="button"
-              role="radio"
-              aria-checked={draft.lens === l.id}
-              key={l.id}
-              className={`lens${draft.lens === l.id ? ' on' : ''}`}
-              onClick={() => setDraft({ ...draft, lens: l.id })}
-            >
-              <b>{l.name}</b>
-              <span>{l.intent}</span>
-            </button>
-          ))}
-        </div>
-      </section>
 
       <section>
         <h3>Packet types</h3>

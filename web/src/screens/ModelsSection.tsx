@@ -30,7 +30,6 @@ export function ModelsSection({ llm, onSaved }: { llm: LlmSettings; onSaved: (s:
   const [busy, setBusy] = useState<'models' | 'test' | 'save' | null>(null)
   const [checks, setChecks] = useState<DoctorCheck[] | null>(null)
   const [showKey, setShowKey] = useState(false)
-  const [showCa, setShowCa] = useState(false)
 
   const preset = llm.presets.find((p) => p.id === draft.provider) ?? llm.presets[0]
   const sameProvider = draft.provider === llm.provider
@@ -112,8 +111,6 @@ export function ModelsSection({ llm, onSaved }: { llm: LlmSettings; onSaved: (s:
       setBusy(null)
     }
   }
-
-  const tlsError = [listError?.fix, ...(checks ?? []).map((c) => c.fix)].some((f) => f?.includes('LLM_CA_BUNDLE'))
 
   const status = dirty ? 'Unsaved changes' : connected ? 'Configured' : `Missing: ${llm.missing.join(', ')}`
 
@@ -200,34 +197,10 @@ export function ModelsSection({ llm, onSaved }: { llm: LlmSettings; onSaved: (s:
             <small>{preset.key_help}</small>
           </label>
 
-          {(showCa || draft.ca_bundle || tlsError) && (
-            <label className="field">
-              <span>
-                Extra CA certificate <code className="faint">LLM_CA_BUNDLE</code>
-              </span>
-              <input
-                className="mono"
-                value={draft.ca_bundle}
-                placeholder="~/company-ca.pem"
-                spellCheck={false}
-                onChange={(e) => setDraft({ ...draft, ca_bundle: e.target.value })}
-              />
-              <small>
-                PEM file with your company's root CA, trusted on top of the public roots. macOS:{' '}
-                <code>security find-certificate -c "&lt;root CA name&gt;" -p &gt; ~/company-ca.pem</code>
-              </small>
-            </label>
-          )}
-
           <div className="actions">
             <button type="button" className="btn" disabled={!canCall || busy !== null} onClick={() => loadModels(draft)}>
               {busy === 'models' ? 'Loading…' : models ? `Reload models (${models.length})` : 'Load models'}
             </button>
-            {!showCa && !draft.ca_bundle && !tlsError && (
-              <button type="button" className="link small" onClick={() => setShowCa(true)}>
-                TLS error? Add a CA certificate
-              </button>
-            )}
           </div>
           {listError && (
             <p className="check-fix bad">

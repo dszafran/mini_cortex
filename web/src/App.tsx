@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { api } from './api/client'
-import type { ConnectorInfo, DataMode, Lens, LlmSettings, Settings } from './api/types'
+import type { ConnectorInfo, DataMode, LlmSettings, Settings } from './api/types'
 import { ChatIcon, MemoryIcon, MoonIcon, SourcesIcon, SunIcon, TuneIcon } from './components/icons'
 import { ChatScreen } from './screens/ChatScreen'
 import { MemoryScreen } from './screens/MemoryScreen'
@@ -22,7 +22,6 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(fromHash)
   const [theme, setTheme] = useState<Theme>(readTheme)
   const [settings, setSettings] = useState<Settings | null>(null)
-  const [lenses, setLenses] = useState<Lens[]>([])
   const [connectors, setConnectors] = useState<ConnectorInfo[]>([])
   const [hub, setHub] = useState('')
   const [toast, setToast] = useState<string | null>(null)
@@ -33,7 +32,6 @@ export default function App() {
     api.mode().then(setMode)
     api.settings().then(setSettings)
     api.llm().then(setLlm)
-    api.lenses().then(setLenses)
     api.connectors().then((r) => {
       setConnectors(r.connectors)
       setHub(r.hub)
@@ -70,8 +68,6 @@ export default function App() {
     setTheme(next)
   }
 
-  const lensName = lenses.find((l) => l.id === settings?.lens)?.name ?? '…'
-
   const nav: { id: Screen; label: string; icon: ReactNode }[] = [
     { id: 'chat', label: 'Chat', icon: <ChatIcon /> },
     { id: 'memory', label: 'Memory', icon: <MemoryIcon /> },
@@ -85,9 +81,6 @@ export default function App() {
           <i />
           mini-cortex
         </div>
-        <button type="button" className="chip" onClick={() => go('tune')} title="Change the lens on Tune">
-          Lens <b>{lensName}</b>
-        </button>
         {connectors.map((c) => (
           <button type="button" key={c.name} className="chip" onClick={() => go('sources')}>
             <span className={`dot${c.status === 'live' ? ' live pulse' : ''}`} />
@@ -175,7 +168,6 @@ export default function App() {
         {screen === 'tune' && settings && (
           <TuneScreen
             settings={settings}
-            lenses={lenses}
             llm={llm}
             onLlmSaved={(s) => {
               setLlm(s)
