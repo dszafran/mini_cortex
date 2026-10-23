@@ -271,6 +271,7 @@ async def test_routes_never_return_the_key(upstream, env_file):
 
     first = (await api.get("/api/llm/settings")).json()
     assert first["provider"] == "scaleway" and "API key" in first["missing"]
+    assert [p["id"] for p in first["presets"]] == ["scaleway", "openrouter"]     # no local or internal options
 
     draft = {"provider": "custom", "base_url": url, "api_key": GOOD_KEY, "chat_model": "glm-5.3",
              "extract_model": "deepseek-v4.1-flash", "embed_model": "qwen3-embedding-8b", "embed_dim": 1024}

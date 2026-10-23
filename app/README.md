@@ -43,7 +43,7 @@ uv run mini-cortex snapshot list
 | `mini_cortex/launcher.py` | Connector child processes: start, prefix logs, restart, stop |
 | `mini_cortex/snapshot.py` | `snapshot save/load/list` |
 | `mini_cortex/pipeline.py`, `packetize.py`, `dedup.py`, `store.py`, `search.py`, `chat.py`, `pipeline_routes.py` | Memory: items → packets → dedup → LanceDB; search and chat |
-| `mini_cortex/llm_config.py` | Settings from the repo-root `.env` (`MINI_CORTEX_ENV` overrides the path). Provider presets: Scaleway, Ollama, any OpenAI-compatible URL |
+| `mini_cortex/llm_config.py` | Settings from the repo-root `.env` (`MINI_CORTEX_ENV` overrides the path). Provider presets: Scaleway, OpenRouter (backup); `custom` by hand only |
 | `mini_cortex/llm.py` | `LLM`: one `openai` client for every role. `chat`, `stream`, `extract` (structured output with a prompt+parse fallback), `embed` (Cortex's `search_document:` / `search_query:` prefixes, `dimensions`) |
 | `mini_cortex/doctor.py` | `uv run doctor`: settings, model list, chat, structured output, tool calling, embedding size. Each failure prints a fix |
 | `mini_cortex/llm_routes.py` | `/api/llm/*` for Tune → Models |
@@ -63,8 +63,8 @@ uv run pytest          # stub OpenAI-compatible server, a real SDK connector end
 Scaleway uses `SCW_SECRET_KEY` and `SCW_PROJECT_ID`, the same variables OpenCode's Scaleway provider reads, so one key
 serves both. The base URL is `https://api.scaleway.ai/<project id>/v1`. The backup preset, OpenRouter, uses
 `OPENROUTER_API_KEY` (OpenCode reads it too) and the same models under OpenRouter's names; its requests only go to
-providers that support tools and structured output. Any other OpenAI-compatible server (a vLLM
-deployment, Ollama, LM Studio, OpenAI) works with `LLM_PROVIDER=custom` + `LLM_BASE_URL` + `LLM_API_KEY`.
+providers that support tools and structured output. The Models screen offers only these two. An organiser can still point
+the app at another OpenAI-compatible server by hand: `LLM_PROVIDER=custom` + `LLM_BASE_URL` + `LLM_API_KEY` in `.env`.
 
 ## The key
 

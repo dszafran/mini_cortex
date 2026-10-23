@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException
 
 from .doctor import explain, run_checks, short
 from .llm import LLM
-from .llm_config import (PRESETS, LLMSettings, SettingsUpdate, draft_settings, env_path, key_follows, key_hint,
+from .llm_config import (OFFERED, PRESETS, LLMSettings, SettingsUpdate, draft_settings, env_path, key_follows, key_hint,
                          raw_values, resolve, save_settings)
 
 EMBED_HINTS = ("embed", "bge", "e5-", "gte-", "nomic")
@@ -40,7 +40,7 @@ def make_router(path: Path | None = None, on_saved: Callable[[LLMSettings], None
             "chat_model": s.chat_model, "extract_model": s.extract_model,
             "embed_model": s.embed_model, "embed_dim": s.embed_dim, "ca_bundle": s.ca_bundle,
             "missing": s.missing(), "env_file": str(file()), "overridden": overridden,
-            "presets": [p.model_dump() for p in PRESETS.values()],
+            "presets": [PRESETS[p].model_dump() for p in OFFERED],
         }
 
     @router.get("/settings")
@@ -52,7 +52,7 @@ def make_router(path: Path | None = None, on_saved: Callable[[LLMSettings], None
         if u.provider not in PRESETS:
             raise HTTPException(422, f"unknown provider {u.provider!r}")
         if u.provider == "scaleway" and any(c in u.project_id for c in "/:"):
-            raise HTTPException(422, "The project ID looks like a URL. For another endpoint, pick 'Other / internal'.")
+            raise HTTPException(422, "The project ID looks like a URL. Paste the project ID (a UUID) from the Scaleway console.")
         s = draft(u)
         if s.preset.needs_key and not s.api_key:
             raise HTTPException(422, "New endpoint: enter its API key (the saved key stays with the old one).")

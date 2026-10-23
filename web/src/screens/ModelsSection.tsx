@@ -157,28 +157,7 @@ export function ModelsSection({ llm, onSaved }: { llm: LlmSettings; onSaved: (s:
               />
               {/[/:]/.test(draft.project_id) ? (
                 <small className="warn-note">
-                  That looks like a URL, not a Scaleway project ID.{' '}
-                  <button
-                    type="button"
-                    className="link"
-                    onClick={() => {
-                      const custom = llm.presets.find((p) => p.id === 'custom')!
-                      setDraft({
-                        ...draft,
-                        provider: custom.id,
-                        base_url: draft.project_id.trim(),
-                        project_id: '',
-                        chat_model: '',
-                        extract_model: '',
-                        embed_model: '',
-                        embed_dim: 0,
-                      })
-                      setModels(null)
-                      setChecks(null)
-                    }}
-                  >
-                    Use it as the base URL of another OpenAI-compatible server
-                  </button>
+                  That looks like a URL, not a Scaleway project ID. Paste the project ID (a UUID) from the Scaleway console.
                 </small>
               ) : (
                 <small>

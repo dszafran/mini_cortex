@@ -5,7 +5,7 @@
     packets = await llm.extract(messages, PacketList)          # validated Pydantic object
     vectors = await llm.embed(["text"], kind="document")
 
-Scaleway, a vLLM deployment, Ollama and OpenAI all speak this API, so switching provider is a settings change.
+Scaleway, OpenRouter and most other servers speak this API, so switching provider is a settings change.
 """
 
 from __future__ import annotations

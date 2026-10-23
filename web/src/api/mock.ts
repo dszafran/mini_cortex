@@ -598,30 +598,6 @@ const presets: LlmSettings['presets'] = [
     embed_model: 'qwen3-embedding-8b',
     embed_dim: 1024,
   },
-  {
-    id: 'ollama',
-    label: 'Ollama (local)',
-    base_url: 'http://localhost:11434/v1',
-    needs_key: false,
-    key_env: 'LLM_API_KEY',
-    key_help: 'No key needed. Pull the models first, e.g. `ollama pull qwen3:8b`.',
-    chat_model: '',
-    extract_model: '',
-    embed_model: '',
-    embed_dim: 0,
-  },
-  {
-    id: 'custom',
-    label: 'Other / internal (OpenAI-compatible)',
-    base_url: '',
-    needs_key: true,
-    key_env: 'LLM_API_KEY',
-    key_help: 'Any server that speaks the OpenAI /v1 API: an internal inference endpoint, vLLM, LM Studio, OpenAI, …',
-    chat_model: '',
-    extract_model: '',
-    embed_model: '',
-    embed_dim: 0,
-  },
 ]
 
 export const llmSettings: LlmSettings = {

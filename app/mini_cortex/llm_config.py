@@ -3,11 +3,11 @@
 Everything lives in the repo-root `.env` (override the path with MINI_CORTEX_ENV). Real environment variables win
 over the file, so the UI reports them as "overridden" instead of silently ignoring a save.
 
-    LLM_PROVIDER    scaleway | openrouter | ollama | custom
+    LLM_PROVIDER    scaleway | openrouter (the backup); custom only by hand, for tests and organisers
     SCW_SECRET_KEY  Scaleway API key       } the same variables OpenCode's Scaleway provider reads,
     SCW_PROJECT_ID  Scaleway project id    } so one key serves both
     OPENROUTER_API_KEY  OpenRouter key (the workshop's backup provider; OpenCode reads it too)
-    LLM_BASE_URL    any OpenAI-compatible /v1 URL (ollama, custom)
+    LLM_BASE_URL    any OpenAI-compatible /v1 URL (custom)
     LLM_API_KEY     key for LLM_BASE_URL
     CHAT_MODEL      answers questions in chat (tool calling)
     EXTRACT_MODEL   packetize + dedup verdicts (structured output, high volume)
@@ -61,13 +61,12 @@ PRESETS: dict[str, Preset] = {
         key_help="Use the key your instructor gives you, or your own from openrouter.ai → Keys.",
         chat_model="qwen/qwen3-235b-a22b-2507", extract_model="qwen/qwen3-235b-a22b-2507",
         embed_model="qwen/qwen3-embedding-8b", embed_dim=1024),
-    "ollama": Preset(
-        id="ollama", label="Ollama (local)", base_url="http://localhost:11434/v1", needs_key=False, key_env="LLM_API_KEY",
-        key_help="No key needed. Pull the models first, e.g. `ollama pull qwen3:8b`."),
+    # Not offered in the UI: set by hand in .env (LLM_BASE_URL + LLM_API_KEY), e.g. by tests or organisers.
     "custom": Preset(
         id="custom", label="Other / internal (OpenAI-compatible)", base_url="", needs_key=True, key_env="LLM_API_KEY",
         key_help="Any server that speaks the OpenAI /v1 API: an internal inference endpoint, vLLM, LM Studio, OpenAI, …"),
 }
+OFFERED = ("scaleway", "openrouter")     # the providers the Models screen lets participants pick
 
 
 class LLMSettings(BaseModel):
