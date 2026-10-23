@@ -57,7 +57,7 @@ export interface PacketSources {
   sources: (SourceRef & { text: string | null; reply_to?: string | null; edited?: boolean })[]
 }
 
-export type Stage = 'intake' | 'packetize' | 'dedup' | 'dream'
+export type Stage = 'intake' | 'packetize' | 'dedup'
 export type Action =
   | 'FETCH'
   | 'PUSH'

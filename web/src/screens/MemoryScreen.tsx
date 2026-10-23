@@ -17,7 +17,7 @@ import { TypeChip, Verdict } from '../components/atoms'
 import { SourceMessages } from '../components/SourceMessages'
 import { fmtDay, fmtDayTime, fmtTime, streamLabel } from '../fmt'
 
-type View = 'activity' | 'packets' | 'dream'
+type View = 'activity' | 'packets'
 
 export function MemoryScreen({
   theta,
@@ -79,20 +79,6 @@ export function MemoryScreen({
         <Activity log={log} byId={byId} theta={theta} view={view} setView={setView} />
       )}
       {view === 'packets' && <Packets packets={packets} log={log} view={view} setView={setView} live={live} />}
-      {view === 'dream' && (
-        <div className="col mem-full">
-          <div className="col-head">
-            <ViewSwitch view={view} setView={setView} />
-          </div>
-          <div className="empty">
-            <h3>Dream is a bonus step</h3>
-            <p>
-              Press Sleep to consolidate memory offline: merge late duplicates, mark superseded decisions and summarise
-              clusters. Every change will be listed here as a diff.
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -205,7 +191,6 @@ function ViewSwitch({ view, setView }: { view: View; setView: (v: View) => void 
   const items: [View, string][] = [
     ['activity', 'Activity'],
     ['packets', 'Packets'],
-    ['dream', 'Dream ☾'],
   ]
   return (
     <div className="seg" role="group" aria-label="Memory view">

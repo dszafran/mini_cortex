@@ -139,14 +139,6 @@ export default function App() {
         >
           {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
         </button>
-        <button
-          type="button"
-          className="btn ghost"
-          title="Bonus: the dream phase consolidates memory offline"
-          onClick={() => setToast('Sleep (dream phase) is a bonus step and is not built yet.')}
-        >
-          ☾ Sleep
-        </button>
       </header>
 
       <nav className="rail" aria-label="Screens">

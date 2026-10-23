@@ -40,4 +40,3 @@ shows real connectors, frames, memory and chat. `npm run dev` proxies `/api` to 
 - Chat streams canned answers. Try asking about the backhaul backup, your promises, Gregor's reports, or whether the small cell is cancelled.
 - In Memory, θ follows the **applied** value from Tune, so the line between the nearest packets moves after you press Apply.
 - In Sources, "Backfill a period…" appends a `fetch` frame to the wire log.
-- Sleep (dream) is a placeholder.
